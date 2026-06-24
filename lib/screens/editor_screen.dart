@@ -9,6 +9,7 @@ import '../widgets/editor/canvas_workspace.dart';
 import '../widgets/editor/editor_bottom_bar.dart';
 import '../widgets/editor/left_sidebar.dart';
 import '../widgets/editor/right_sidebar.dart';
+import '../widgets/editor/sidebar_utils.dart';
 import '../widgets/editor/toolbar.dart';
 import '../widgets/editor/viewport_nav.dart';
 import '../widgets/modals/preview_modal.dart';
@@ -26,6 +27,8 @@ class EditorScreen extends StatefulWidget {
 class _EditorScreenState extends State<EditorScreen> {
   late EditorState _state;
   bool _loading = true;
+  bool _leftOpen = true;
+  bool _rightOpen = true;
 
   @override
   void initState() {
@@ -71,14 +74,58 @@ class _EditorScreenState extends State<EditorScreen> {
           ),
           Expanded(
             child: Row(children: [
-              const LeftSidebar(),
+              // Left sidebar — collapses to zero width with animation.
+              AnimatedSize(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeInOut,
+                child: SizedBox(
+                  width: _leftOpen ? null : 0,
+                  child: ClipRect(
+                    child: LeftSidebar(
+                      onClose: () => setState(() => _leftOpen = false),
+                    ),
+                  ),
+                ),
+              ),
+              // Canvas
               Expanded(
                 child: Stack(children: [
                   const CanvasWorkspace(),
                   ViewportNav(onPrint: _openPrintPreview),
+                  // Floating reopen pills when a sidebar is collapsed
+                  if (!_leftOpen)
+                    Positioned(
+                      left: 12,
+                      top: 12,
+                      child: FloatingSidebarPill(
+                        icon: Icons.data_object_outlined,
+                        onTap: () => setState(() => _leftOpen = true),
+                      ),
+                    ),
+                  if (!_rightOpen)
+                    Positioned(
+                      right: 12,
+                      top: 12,
+                      child: FloatingSidebarPill(
+                        icon: Icons.tune,
+                        onTap: () => setState(() => _rightOpen = true),
+                      ),
+                    ),
                 ]),
               ),
-              const RightSidebar(),
+              // Right sidebar — collapses to zero width with animation.
+              AnimatedSize(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeInOut,
+                child: SizedBox(
+                  width: _rightOpen ? null : 0,
+                  child: ClipRect(
+                    child: RightSidebar(
+                      onClose: () => setState(() => _rightOpen = false),
+                    ),
+                  ),
+                ),
+              ),
             ]),
           ),
           const EditorBottomBar(),

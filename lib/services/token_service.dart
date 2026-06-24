@@ -56,9 +56,11 @@ class TokenService {
         }
       }
 
-      // Direct field
-      final parts = path.split('.');
-      final val = _traverseRecord(record, parts);
+      // Direct field: try flat key first (e.g. record["customer.name"]),
+      // then fall back to nested traversal for backward compatibility.
+      final flatVal = record[path];
+      if (flatVal != null) return flatVal.toString();
+      final val = _traverseRecord(record, path.split('.'));
       return val?.toString() ?? m.group(0)!;
     });
   }

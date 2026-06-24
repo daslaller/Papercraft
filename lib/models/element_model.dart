@@ -79,6 +79,8 @@ class TextElement implements CanvasElement {
   final double lineHeight;
   final GradientDef? textGradient;
   final String? boxShadow;
+  final double? letterSpacing;
+  final String? textDecoration; // 'underline' | 'lineThrough' | 'overline' | null
 
   // Flex child props (null when absolute)
   final int? flex;
@@ -103,6 +105,8 @@ class TextElement implements CanvasElement {
     this.lineHeight = 1.4,
     this.textGradient,
     this.boxShadow,
+    this.letterSpacing,
+    this.textDecoration,
     this.flex,
     this.alignSelf,
   });
@@ -151,6 +155,10 @@ class TextElement implements CanvasElement {
     bool clearGradient = false,
     String? boxShadow,
     bool clearShadow = false,
+    double? letterSpacing,
+    bool clearLetterSpacing = false,
+    String? textDecoration,
+    bool clearDecoration = false,
     int? flex,
     String? alignSelf,
   }) =>
@@ -173,6 +181,8 @@ class TextElement implements CanvasElement {
         lineHeight: lineHeight ?? this.lineHeight,
         textGradient: clearGradient ? null : (textGradient ?? this.textGradient),
         boxShadow: clearShadow ? null : (boxShadow ?? this.boxShadow),
+        letterSpacing: clearLetterSpacing ? null : (letterSpacing ?? this.letterSpacing),
+        textDecoration: clearDecoration ? null : (textDecoration ?? this.textDecoration),
         flex: flex ?? this.flex,
         alignSelf: alignSelf ?? this.alignSelf,
       );
@@ -198,6 +208,8 @@ class TextElement implements CanvasElement {
         'lineHeight': lineHeight,
         if (textGradient != null) 'textGradient': textGradient!.toJson(),
         if (boxShadow != null) 'boxShadow': boxShadow,
+        if (letterSpacing != null) 'letterSpacing': letterSpacing,
+        if (textDecoration != null) 'textDecoration': textDecoration,
         if (flex != null) 'flex': flex,
         if (alignSelf != null) 'alignSelf': alignSelf,
       };
@@ -223,6 +235,8 @@ class TextElement implements CanvasElement {
             ? GradientDef.fromJson(j['textGradient'] as Map<String, dynamic>)
             : null,
         boxShadow: j['boxShadow'] as String?,
+        letterSpacing: (j['letterSpacing'] as num?)?.toDouble(),
+        textDecoration: j['textDecoration'] as String?,
         flex: j['flex'] as int?,
         alignSelf: j['alignSelf'] as String?,
       );

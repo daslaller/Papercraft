@@ -461,6 +461,33 @@ class PropertiesPanel extends StatelessWidget {
           ])),
         ]),
         const SizedBox(height: 8),
+        // Tracking (letter-spacing)
+        Row(children: [
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const _Label('Tracking'),
+            _NumInput(
+              value: el.letterSpacing ?? 0,
+              min: -10,
+              max: 50,
+              step: 0.5,
+              onChanged: (v) => update(v == 0
+                  ? el.copyWith(clearLetterSpacing: true)
+                  : el.copyWith(letterSpacing: v)),
+            ),
+          ])),
+          const SizedBox(width: 8),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const _Label('Underline'),
+            const SizedBox(height: 4),
+            _ToggleButton(
+              on: el.textDecoration == 'underline',
+              onTap: () => update(el.textDecoration == 'underline'
+                  ? el.copyWith(clearDecoration: true)
+                  : el.copyWith(textDecoration: 'underline')),
+            ),
+          ])),
+        ]),
+        const SizedBox(height: 8),
         // Weight + Style
         Row(children: [
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

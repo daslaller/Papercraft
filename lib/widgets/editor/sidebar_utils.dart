@@ -1,42 +1,39 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 
-// Collapsed sidebar pill (replaces the sidebar when closed)
-class SidebarPill extends StatelessWidget {
-  final String label;
-  final String side; // 'left' | 'right'
+// Floating pill to reopen a collapsed sidebar. Positioned in the canvas Stack.
+class FloatingSidebarPill extends StatefulWidget {
+  final IconData icon;
   final VoidCallback onTap;
 
-  const SidebarPill({super.key, required this.label, required this.side, required this.onTap});
+  const FloatingSidebarPill({super.key, required this.icon, required this.onTap});
+
+  @override
+  State<FloatingSidebarPill> createState() => _FloatingSidebarPillState();
+}
+
+class _FloatingSidebarPillState extends State<FloatingSidebarPill> {
+  bool _hovered = false;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: Container(
-          width: 24,
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          width: 32,
+          height: 32,
           decoration: BoxDecoration(
-            color: AppColors.panelBg,
-            border: side == 'left'
-                ? Border(right: BorderSide(color: AppColors.border))
-                : Border(left: BorderSide(color: AppColors.border)),
+            color: _hovered ? AppColors.card : withAlpha(AppColors.card, 0.94),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.border),
+            boxShadow: AppColors.shadowLg,
           ),
-          child: Center(
-            child: RotatedBox(
-              quarterTurns: side == 'left' ? 3 : 1,
-              child: Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 9,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.08,
-                  color: AppColors.mutedForeground,
-                ),
-              ),
-            ),
-          ),
+          child: Icon(widget.icon, size: 14, color: AppColors.mutedForeground),
         ),
       ),
     );
