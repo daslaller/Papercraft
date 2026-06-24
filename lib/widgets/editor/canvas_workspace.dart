@@ -245,8 +245,13 @@ class _CanvasWorkspaceState extends State<CanvasWorkspace> {
   // ── Input handling ────────────────────────────────────────────────────────────
 
   void _onPointerDown(PointerDownEvent e, EditorState state) {
-    if (e.buttons == 4 || state.panMode) {
-      // Middle click or pan mode
+    // Middle-click always pans. Left-click pans only when pan mode is on
+    // AND no element has already claimed this pointer down event.
+    // Child Listener (CanvasElementWidget) fires before parent, so
+    // elementDragActive is set to true before we get here.
+    final isPanGesture = e.buttons == 4 ||
+        (state.panMode && !state.elementDragActive);
+    if (isPanGesture) {
       _isPanning = true;
       _panStart = e.position;
       _panOffsetStart = state.panOffset;
@@ -255,13 +260,13 @@ class _CanvasWorkspaceState extends State<CanvasWorkspace> {
 
   void _onPointerMove(PointerMoveEvent e, EditorState state) {
     if (_isPanning) {
-      state.setPanOffset(
-          _panOffsetStart + (e.position - _panStart));
+      state.setPanOffset(_panOffsetStart + (e.position - _panStart));
     }
   }
 
   void _onPointerUp(PointerUpEvent e, EditorState state) {
     _isPanning = false;
+    state.endElementDrag(); // safety reset if element drag ended without cleanup
   }
 
   void _onScroll(PointerSignalEvent e, EditorState state) {

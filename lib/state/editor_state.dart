@@ -29,7 +29,8 @@ class EditorState extends ChangeNotifier {
   // View
   double _zoom = 100;
   Offset _panOffset = Offset.zero;
-  bool _panMode = false;
+  bool _panMode = true;
+  bool _elementDragActive = false; // set by CanvasElementWidget BEFORE workspace checks
   bool _gridEnabled = false;
   bool _snapEnabled = true;
   double _gridPitch = 10;
@@ -51,6 +52,7 @@ class EditorState extends ChangeNotifier {
   double get zoom => _zoom;
   Offset get panOffset => _panOffset;
   bool get panMode => _panMode;
+  bool get elementDragActive => _elementDragActive;
   bool get gridEnabled => _gridEnabled;
   bool get snapEnabled => _snapEnabled;
   double get gridPitch => _gridPitch;
@@ -117,19 +119,26 @@ class EditorState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void fitToView(double availW, double availH) {
+  void fitToView(double viewW, double viewH) {
     if (_template == null) return;
     final cw = mmToPx(_template!.canvasWidthMm);
     final ch = mmToPx(_template!.canvasHeightMm);
-    final fw = ((availW - 80) / cw * 100).floorToDouble();
-    final fh = ((availH - 80) / ch * 100).floorToDouble();
-    final fit = [fw, fh, 200.0].reduce((a, b) => a < b ? a : b);
-    final nearest = kZoomSteps.reduce((a, b) =>
-        (a - fit).abs() < (b - fit).abs() ? a : b);
-    _zoom = nearest.toDouble();
-    _panOffset = Offset.zero;
+    final fw = (viewW - 96) / cw * 100;
+    final fh = (viewH - 96) / ch * 100;
+    _zoom = [fw, fh, 200.0].reduce((a, b) => a < b ? a : b).clamp(10, 200);
+    final scale = _zoom / 100;
+    // Canvas renders at (48 + panOffset.dx, 48 + panOffset.dy) because OverflowBox
+    // places Center at (0,0) with infinite constraints (Center shrinks to child size).
+    // So to center the canvas: 48 + panX = (viewW - cw*scale) / 2
+    _panOffset = Offset(
+      (viewW - cw * scale) / 2 - 48,
+      (viewH - ch * scale) / 2 - 48,
+    );
     notifyListeners();
   }
+
+  void startElementDrag() => _elementDragActive = true;
+  void endElementDrag() => _elementDragActive = false;
 
   void setPanOffset(Offset o) {
     _panOffset = o;

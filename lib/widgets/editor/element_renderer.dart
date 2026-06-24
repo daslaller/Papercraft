@@ -104,12 +104,21 @@ String? _childAlignSelf(CanvasElement c) => switch (c) {
     };
 
 // Wraps a Row child to respect its alignSelf (cross-axis = vertical in a Row).
+// NOTE: We avoid SizedBox(height: ∞) because section Rows have an unbounded
+// cross-axis, which would crash layout. We use Align only when the child has
+// an explicit height (i.e., bounded cross-axis is guaranteed); otherwise we
+// just return the child and let it size itself naturally.
 Widget _wrapAlignSelfRow(CanvasElement c, Widget child) {
   final as_ = _childAlignSelf(c);
   if (as_ == null || as_ == 'auto' || as_ == 'stretch') {
-    return SizedBox(height: double.infinity, child: child);
+    return child; // natural height; Row cross-axis may be unbounded in sections
   }
+  // For explicit alignment, wrap only if the child has a known height so
+  // Align has bounded constraints to work with.
+  final hasHeight = c.height != null && c.height! > 0;
+  if (!hasHeight) return child;
   return Align(
+    heightFactor: 1,
     alignment: switch (as_) {
       'flex-start' => Alignment.topLeft,
       'center' => Alignment.centerLeft,
@@ -123,10 +132,13 @@ Widget _wrapAlignSelfRow(CanvasElement c, Widget child) {
 // Wraps a Col child to respect its alignSelf (cross-axis = horizontal in a Col).
 Widget _wrapAlignSelfCol(CanvasElement c, Widget child) {
   final as_ = _childAlignSelf(c);
+  // Col cross-axis (horizontal) is bounded when inside canvas / Positioned.
+  // SizedBox(width:∞) = "stretch to available width" which is fine here.
   if (as_ == null || as_ == 'auto' || as_ == 'stretch') {
-    return SizedBox(width: double.infinity, child: child);
+    return child;
   }
   return Align(
+    widthFactor: 1,
     alignment: switch (as_) {
       'flex-start' => Alignment.topLeft,
       'center' => Alignment.topCenter,
@@ -433,11 +445,15 @@ class ElementRenderer extends StatelessWidget {
             child: _wrapAlignSelfRow(c, renderer),
           ));
         }
-        content = Row(
+        final row = Row(
           mainAxisSize: MainAxisSize.max,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: kids,
         );
+        // Section rows have no fixed height (isSection→height:null). Wrap
+        // with IntrinsicHeight so the Row's cross-axis becomes the maximum
+        // natural height of its children instead of being unbounded.
+        content = e.isSection ? IntrinsicHeight(child: row) : row;
       }
     } else {
       // ── Column mode ──────────────────────────────────────────────────────────
