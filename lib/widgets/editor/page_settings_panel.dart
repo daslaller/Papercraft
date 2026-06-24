@@ -128,6 +128,34 @@ class _PageSettingsPanelState extends State<PageSettingsPanel> {
               const Text('Applies to the entire document surface.',
                   style: TextStyle(fontSize: 9, color: AppColors.mutedForeground)),
 
+              const SizedBox(height: 12),
+              const Text('LAYOUT',
+                  style: TextStyle(
+                      fontSize: 10,
+                      letterSpacing: 0.05,
+                      color: AppColors.mutedForeground)),
+              const SizedBox(height: 6),
+              Row(children: [
+                Expanded(
+                  child: Text(
+                    'Section layout',
+                    style: const TextStyle(fontSize: 11),
+                  ),
+                ),
+                Switch(
+                  value: state.sectionLayoutEnabled,
+                  onChanged: state.setSectionLayoutEnabled,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ]),
+              Text(
+                state.sectionLayoutEnabled
+                    ? 'Rows and columns flow at the top of the page.'
+                    : 'Rows and columns can be placed anywhere on the canvas.',
+                style: const TextStyle(
+                    fontSize: 10, color: AppColors.mutedForeground),
+              ),
+
               // Apply button
               if (hasChanges) ...[
                 const SizedBox(height: 12),

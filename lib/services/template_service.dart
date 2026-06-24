@@ -133,6 +133,7 @@ class TemplateService {
       backgroundColor: template.backgroundColor,
       elements: template.elements,
       connectedEntity: template.connectedEntity,
+      sectionLayoutEnabled: template.sectionLayoutEnabled,
       ownerId: ownerId,
       createdDate: now,
       updatedDate: now,

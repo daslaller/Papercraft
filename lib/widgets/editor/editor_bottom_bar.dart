@@ -206,6 +206,8 @@ class _EditorBottomBarState extends State<EditorBottomBar> {
 // ── Printer dropdown ─────────────────────────────────────────────────────────
 
 class _PrinterDropdown extends StatelessWidget {
+  static const _noneValue = '__none__';
+
   final List<Printer> printers;
   final bool loading;
   final String? selectedName;
@@ -218,6 +220,12 @@ class _PrinterDropdown extends StatelessWidget {
     required this.onChanged,
   });
 
+  String get _currentLabel {
+    if (selectedName == null) return 'None (dialog on print)';
+    final match = printers.where((p) => p.name == selectedName).firstOrNull;
+    return match?.name ?? selectedName!;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (loading) {
@@ -225,34 +233,63 @@ class _PrinterDropdown extends StatelessWidget {
           style: TextStyle(fontSize: 11, color: AppColors.mutedForeground));
     }
 
-    Printer? matched;
-    if (selectedName != null) {
-      matched = printers.where((p) => p.name == selectedName).firstOrNull;
-    }
-
-    return DropdownButtonHideUnderline(
-      child: DropdownButton<String?>(
-        value: matched?.name,
-        isDense: true,
-        style: const TextStyle(fontSize: 11, color: AppColors.foreground),
-        hint: const Text('None (dialog on print)',
-            style: TextStyle(fontSize: 11, color: AppColors.mutedForeground)),
-        items: [
-          const DropdownMenuItem<String?>(
-            value: null,
-            child: Text('None — open dialog on print',
-                style: TextStyle(fontSize: 11)),
+    return GestureDetector(
+      onTap: () => _showPrinterMenu(context),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 220),
+            child: Text(
+              _currentLabel,
+              style: const TextStyle(fontSize: 11, color: AppColors.foreground),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
-          ...printers.map((p) => DropdownMenuItem<String?>(
-                value: p.name,
-                child: Text(p.name,
-                    style: const TextStyle(fontSize: 11),
-                    overflow: TextOverflow.ellipsis),
-              )),
-        ],
-        onChanged: onChanged,
+          const SizedBox(width: 4),
+          const Icon(Icons.arrow_drop_down,
+              size: 16, color: AppColors.mutedForeground),
+        ]),
       ),
     );
+  }
+
+  void _showPrinterMenu(BuildContext context) async {
+    final RenderBox box = context.findRenderObject() as RenderBox;
+    final offset = box.localToGlobal(Offset.zero);
+
+    final items = <PopupMenuEntry<String>>[
+      const PopupMenuItem<String>(
+        value: _noneValue,
+        height: 32,
+        child: Text('None — open dialog on print',
+            style: TextStyle(fontSize: 11)),
+      ),
+      ...printers.map((p) => PopupMenuItem<String>(
+            value: p.name,
+            height: 32,
+            child: Text(p.name,
+                style: const TextStyle(fontSize: 11),
+                overflow: TextOverflow.ellipsis),
+          )),
+    ];
+
+    final menuHeight = (items.length * 32.0).clamp(80, 320);
+
+    final selected = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        offset.dx,
+        offset.dy - menuHeight,
+        offset.dx + box.size.width,
+        offset.dy,
+      ),
+      items: items,
+      color: AppColors.card,
+    );
+
+    if (selected == null) return;
+    onChanged(selected == _noneValue ? null : selected);
   }
 }
 

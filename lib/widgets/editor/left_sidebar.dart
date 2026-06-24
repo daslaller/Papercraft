@@ -7,72 +7,137 @@ import '../../theme/app_colors.dart';
 import 'sidebar_utils.dart';
 
 // ── Mock preview records ─────────────────────────────────────────────────────
+// Groups match the token namespace: {{product.name}}, {{customer.email}}, etc.
+// TokenService._traverseRecord resolves these nested paths automatically.
 
 class _PreviewRecord {
   final String displayName;
   final String subtitle;
-  final Map<String, String> values;
-  const _PreviewRecord({required this.displayName, required this.subtitle, required this.values});
+  // category key → {field → value}, e.g. 'product' → {'name': 'Aurora Lamp'}
+  final Map<String, Map<String, String>> groups;
+  const _PreviewRecord({
+    required this.displayName,
+    required this.subtitle,
+    required this.groups,
+  });
 }
 
 const _kMockRecords = [
   _PreviewRecord(
     displayName: 'Aurora Lamp',
     subtitle: 'sku LMP-204',
-    values: {
-      'id': 'REC-001',
-      'name': 'Aurora Lamp',
-      'sku': 'LMP-204',
-      'price': r'$48.00',
-      'email': 'aurora@example.com',
-      'quantity': '12',
-      'address': '42 Light Ave',
-      'phone': '+1 555-0101',
+    groups: {
+      'product': {
+        'name': 'Aurora Lamp',
+        'description': 'Elegant ceramic floor lamp',
+        'price': r'$48.00',
+        'sku': 'LMP-204',
+        'category': 'Lighting',
+      },
+      'customer': {
+        'name': 'Sophie Chen',
+        'company': 'Nordic Home',
+        'email': 'sophie@nordichome.com',
+        'phone': '+1 555-0201',
+        'address': '8 Birch Lane',
+        'city': 'Austin, TX 78701',
+        'zip': '78701',
+      },
+      'order': {
+        'number': 'INV-1856',
+        'date': 'Jun 12, 2026',
+        'quantity': '3',
+        'subtotal': r'$144.00',
+        'tax': r'$11.52',
+        'total': r'$155.52',
+        'status': 'Pending',
+      },
     },
   ),
   _PreviewRecord(
     displayName: 'Field Notebook',
     subtitle: 'sku NB-011',
-    values: {
-      'id': 'REC-002',
-      'name': 'Field Notebook',
-      'sku': 'NB-011',
-      'price': r'$24.00',
-      'email': 'field@example.com',
-      'quantity': '5',
-      'address': '14 Pearl Street',
-      'phone': '+1 555-0102',
+    groups: {
+      'product': {
+        'name': 'Field Notebook',
+        'description': 'Hardcover ruled notebook',
+        'price': r'$24.00',
+        'sku': 'NB-011',
+        'category': 'Stationery',
+      },
+      'customer': {
+        'name': 'Marcus Lee',
+        'company': 'Lumen Studio',
+        'email': 'marcus@lumenstudio.com',
+        'phone': '+1 555-0102',
+        'address': '14 Pearl Street',
+        'city': 'Brooklyn, NY 11201',
+        'zip': '11201',
+      },
+      'order': {
+        'number': 'INV-2042',
+        'date': 'Jun 19, 2026',
+        'quantity': '5',
+        'subtotal': r'$120.00',
+        'tax': r'$9.60',
+        'total': r'$1,280.30',
+        'status': 'Shipped',
+      },
     },
   ),
   _PreviewRecord(
     displayName: 'Cedar Candle',
     subtitle: 'sku CC-033',
-    values: {
-      'id': 'REC-003',
-      'name': 'Cedar Candle',
-      'sku': 'CC-033',
-      'price': r'$18.00',
-      'email': 'cedar@example.com',
-      'quantity': '8',
-      'address': '7 Oak Street',
-      'phone': '+1 555-0103',
+    groups: {
+      'product': {
+        'name': 'Cedar Candle',
+        'description': 'Hand-poured soy candle',
+        'price': r'$18.00',
+        'sku': 'CC-033',
+        'category': 'Home Decor',
+      },
+      'customer': {
+        'name': 'Jordan Park',
+        'company': 'Acme Corp',
+        'email': 'jordan@acme.com',
+        'phone': '+1 555-0303',
+        'address': '22 Maple Ave',
+        'city': 'Seattle, WA 98101',
+        'zip': '98101',
+      },
+      'order': {
+        'number': 'INV-2156',
+        'date': 'Jun 21, 2026',
+        'quantity': '10',
+        'subtotal': r'$180.00',
+        'tax': r'$14.40',
+        'total': r'$194.40',
+        'status': 'Processing',
+      },
     },
   ),
 ];
 
-const _kFieldDefs = ['id', 'name', 'sku', 'price', 'email', 'quantity', 'address', 'phone'];
+// Ordered list of field groups shown in the sidebar (5+7+7 = 19 total fields).
+const _kFieldGroups = [
+  ('Product', ['product.name', 'product.description', 'product.price', 'product.sku', 'product.category']),
+  ('Customer', ['customer.name', 'customer.company', 'customer.email', 'customer.phone', 'customer.address', 'customer.city', 'customer.zip']),
+  ('Order', ['order.number', 'order.date', 'order.quantity', 'order.subtotal', 'order.tax', 'order.total', 'order.status']),
+];
+
+const int _kTotalFieldCount = 19;
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 
 class LeftSidebar extends StatefulWidget {
-  const LeftSidebar({super.key});
+  final VoidCallback onClose;
+  const LeftSidebar({super.key, required this.onClose});
 
   @override
   State<LeftSidebar> createState() => _LeftSidebarState();
 }
 
 class _LeftSidebarState extends State<LeftSidebar> {
-  bool _open = true;
   double _width = 240;
 
   final _entityCtrl = TextEditingController();
@@ -90,11 +155,24 @@ class _LeftSidebarState extends State<LeftSidebar> {
   void initState() {
     super.initState();
     final state = context.read<EditorState>();
-    _connectedEntity = state.template?.connectedEntity;
-    if (_connectedEntity != null) {
+    // Auto-connect with 'orders' if no entity is persisted yet, so the
+    // sidebar shows useful placeholder data immediately without requiring
+    // the user to type anything first.
+    _connectedEntity = state.template?.connectedEntity ?? 'orders';
+    if (state.template?.connectedEntity == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final s = context.read<EditorState>();
+        final template = s.template;
+        if (template != null) {
+          s.updateTemplate(template.copyWith(connectedEntity: _connectedEntity));
+        }
+        _syncPreviewRecord(s);
+      });
+    } else {
       _syncPreviewRecord(state);
-      _loadComputed();
     }
+    _loadComputed();
   }
 
   Future<void> _loadComputed() async {
@@ -106,17 +184,19 @@ class _LeftSidebarState extends State<LeftSidebar> {
   void _syncPreviewRecord(EditorState state) {
     if (_connectedEntity == null) return;
     final record = _kMockRecords[_selectedRecordIdx];
-    final nested = {
-      _connectedEntity!: {
-        for (final e in record.values.entries) e.key: e.value
+    // Build a FLAT map: {'product.name': 'Aurora Lamp', 'customer.email': '...', ...}
+    // TokenService resolves {{product.name}} via direct flat key lookup.
+    final flat = <String, dynamic>{};
+    for (final groupEntry in record.groups.entries) {
+      for (final fieldEntry in groupEntry.value.entries) {
+        flat['${groupEntry.key}.${fieldEntry.key}'] = fieldEntry.value;
       }
-    };
-    state.setPreviewRecord(nested, _connectedEntity!);
+    }
+    state.setPreviewRecord(flat, _connectedEntity!);
   }
 
   void _connectEntity(EditorState state) {
-    final name = _entityCtrl.text.trim();
-    if (name.isEmpty) return;
+    final name = _entityCtrl.text.trim().isEmpty ? 'orders' : _entityCtrl.text.trim();
     setState(() => _connectedEntity = name);
     final template = state.template;
     if (template != null) {
@@ -153,14 +233,6 @@ class _LeftSidebarState extends State<LeftSidebar> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_open) {
-      return SidebarPill(
-        label: 'DATA',
-        side: 'left',
-        onTap: () => setState(() => _open = true),
-      );
-    }
-
     return ResizableSidebar(
       width: _width,
       side: 'right',
@@ -198,7 +270,7 @@ class _LeftSidebarState extends State<LeftSidebar> {
           const Text('Data', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.foreground)),
           const Spacer(),
           GestureDetector(
-            onTap: () => setState(() => _open = false),
+            onTap: widget.onClose,
             child: const Icon(Icons.close, size: 13, color: AppColors.mutedForeground),
           ),
         ]),
@@ -223,17 +295,17 @@ class _LeftSidebarState extends State<LeftSidebar> {
               color: withAlpha(AppColors.secondary, 0.9),
               borderRadius: BorderRadius.circular(4),
             ),
-            child: const Text('Mock', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w500, color: AppColors.mutedForeground)),
+            child: const Text('Postgres', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w500, color: AppColors.mutedForeground)),
           ),
           const SizedBox(width: 8),
           GestureDetector(
-            onTap: () => setState(() => _open = false),
+            onTap: widget.onClose,
             child: const Icon(Icons.close, size: 13, color: AppColors.mutedForeground),
           ),
         ]),
         const SizedBox(height: 3),
         Text(
-          'demo · $_connectedEntity · ${_kFieldDefs.length} fields mapped',
+          'production · $_connectedEntity · $_kTotalFieldCount fields mapped',
           style: const TextStyle(fontSize: 10, color: AppColors.mutedForeground),
         ),
         const SizedBox(height: 6),
@@ -386,13 +458,17 @@ class _LeftSidebarState extends State<LeftSidebar> {
     final canInsert = selectedEl is TextElement;
     final selectedRecord = _kMockRecords[_selectedRecordIdx];
 
-    final filtered = _kFieldDefs
-        .where((f) => _search.isEmpty ||
-            f.toLowerCase().contains(_search.toLowerCase()) ||
-            '${_connectedEntity!}.$f'.contains(_search.toLowerCase()))
+    // Filter tokens across all groups
+    final searchLc = _search.toLowerCase();
+    bool tokenMatches(String token) =>
+        _search.isEmpty || token.toLowerCase().contains(searchLc);
+
+    final groups = _kFieldGroups
+        .map((g) => (g.$1, g.$2.where(tokenMatches).toList()))
+        .where((g) => g.$2.isNotEmpty)
         .toList();
 
-    if (filtered.isEmpty) {
+    if (groups.isEmpty) {
       return const Padding(
         padding: EdgeInsets.all(12),
         child: Text('No fields match', style: TextStyle(fontSize: 10, color: AppColors.mutedForeground)),
@@ -400,54 +476,41 @@ class _LeftSidebarState extends State<LeftSidebar> {
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const SizedBox(height: 10),
-        // Entity group label
-        Text(
-          _connectedEntity![0].toUpperCase() + _connectedEntity!.substring(1),
-          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.mutedForeground),
-        ),
-        const SizedBox(height: 4),
-        ...filtered.map((field) {
-          final token = '${_connectedEntity!}.$field';
-          final value = selectedRecord.values[field] ?? '';
-          return GestureDetector(
-            onTap: () {
-              if (canInsert) {
-                final el = selectedEl as TextElement;
-                state.commitUpdate(el.id, el.copyWith(content: '${el.content}{{$token}}'));
-              } else {
-                final newEl = TextElement.create().copyWith(content: '{{$token}}');
-                state.addElement(newEl);
-              }
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 5),
-              decoration: BoxDecoration(
-                border: Border(bottom: BorderSide(color: withAlpha(AppColors.border, 0.7))),
-              ),
-              child: Row(children: [
-                Container(width: 6, height: 6, decoration: BoxDecoration(color: AppColors.accent, shape: BoxShape.circle)),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(token, style: const TextStyle(fontSize: 10, fontFamily: 'monospace', color: AppColors.foreground)),
-                ),
-                const SizedBox(width: 4),
-                Flexible(
-                  child: Text(
-                    value,
-                    style: const TextStyle(fontSize: 10, color: AppColors.mutedForeground),
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.right,
-                  ),
-                ),
-              ]),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: groups.expand((group) {
+          final groupLabel = group.$1;
+          final tokens = group.$2;
+          return [
+            const SizedBox(height: 6),
+            Text(
+              groupLabel,
+              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.mutedForeground),
             ),
-          );
-        }),
-        const SizedBox(height: 8),
-      ]),
+            const SizedBox(height: 2),
+            ...tokens.map((token) {
+              // Resolve preview value: token = 'product.name' → parts = ['product','name']
+              final parts = token.split('.');
+              final value = parts.length == 2
+                  ? (selectedRecord.groups[parts[0]]?[parts[1]] ?? '')
+                  : '';
+              return _FieldRow(
+                token: token,
+                previewValue: value,
+                onTap: () {
+                  if (canInsert) {
+                    final el = selectedEl as TextElement;
+                    state.commitUpdate(el.id, el.copyWith(content: '${el.content}{{$token}}'));
+                  } else {
+                    state.addElement(TextElement.create().copyWith(content: '{{$token}}'));
+                  }
+                },
+              );
+            }),
+          ];
+        }).toList(),
+      ),
     );
   }
 
@@ -557,6 +620,68 @@ class _LeftSidebarState extends State<LeftSidebar> {
     _cfNameCtrl.clear();
     _cfFormulaCtrl.clear();
     if (_connectedEntity != null) await TokenService.saveComputedFields(_connectedEntity!, _computed);
+  }
+}
+
+// ── Field row ─────────────────────────────────────────────────────────────────
+
+class _FieldRow extends StatefulWidget {
+  final String token;
+  final String previewValue;
+  final VoidCallback onTap;
+
+  const _FieldRow({
+    required this.token,
+    required this.previewValue,
+    required this.onTap,
+  });
+
+  @override
+  State<_FieldRow> createState() => _FieldRowState();
+}
+
+class _FieldRowState extends State<_FieldRow> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 4),
+          decoration: BoxDecoration(
+            color: _hovered ? withAlpha(AppColors.accent, 0.05) : Colors.transparent,
+            borderRadius: BorderRadius.circular(4),
+            border: Border(bottom: BorderSide(color: withAlpha(AppColors.border, 0.7))),
+          ),
+          child: Row(children: [
+            Container(
+              width: 6, height: 6,
+              decoration: BoxDecoration(color: AppColors.accent, shape: BoxShape.circle),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                widget.token,
+                style: const TextStyle(fontSize: 10, fontFamily: 'monospace', color: AppColors.foreground),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                widget.previewValue,
+                style: const TextStyle(fontSize: 10, color: AppColors.mutedForeground),
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.right,
+              ),
+            ),
+          ]),
+        ),
+      ),
+    );
   }
 }
 

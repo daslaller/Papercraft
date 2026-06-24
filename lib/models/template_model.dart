@@ -40,6 +40,9 @@ class Template {
   final String? connectedEntity;
   final String? thumbnailUrl;
   final String? printerName;
+  /// When true, new row/col containers are flow sections at the top of the page.
+  /// When false, row/col are freely positioned on the canvas.
+  final bool sectionLayoutEnabled;
   final String ownerId;
   final DateTime createdDate;
   final DateTime updatedDate;
@@ -56,6 +59,7 @@ class Template {
     this.connectedEntity,
     this.thumbnailUrl,
     this.printerName,
+    this.sectionLayoutEnabled = false,
     required this.ownerId,
     required this.createdDate,
     required this.updatedDate,
@@ -74,6 +78,7 @@ class Template {
     String? thumbnailUrl,
     String? printerName,
     bool clearPrinter = false,
+    bool? sectionLayoutEnabled,
     DateTime? updatedDate,
   }) =>
       Template(
@@ -89,6 +94,8 @@ class Template {
             clearEntity ? null : (connectedEntity ?? this.connectedEntity),
         thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
         printerName: clearPrinter ? null : (printerName ?? this.printerName),
+        sectionLayoutEnabled:
+            sectionLayoutEnabled ?? this.sectionLayoutEnabled,
         ownerId: ownerId,
         createdDate: createdDate,
         updatedDate: updatedDate ?? this.updatedDate,
@@ -106,6 +113,7 @@ class Template {
         if (connectedEntity != null) 'connectedEntity': connectedEntity,
         if (thumbnailUrl != null) 'thumbnailUrl': thumbnailUrl,
         if (printerName != null) 'printerName': printerName,
+        'sectionLayoutEnabled': sectionLayoutEnabled,
         'ownerId': ownerId,
         'createdDate': createdDate.toIso8601String(),
         'updatedDate': updatedDate.toIso8601String(),
@@ -123,6 +131,7 @@ class Template {
         connectedEntity: j['connectedEntity'] as String?,
         thumbnailUrl: j['thumbnailUrl'] as String?,
         printerName: j['printerName'] as String?,
+        sectionLayoutEnabled: j['sectionLayoutEnabled'] as bool? ?? false,
         ownerId: j['ownerId'] as String? ?? '',
         createdDate: DateTime.parse(j['createdDate'] as String),
         updatedDate: DateTime.parse(j['updatedDate'] as String),

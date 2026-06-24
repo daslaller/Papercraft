@@ -8,34 +8,20 @@ import 'properties_panel.dart';
 import 'sidebar_utils.dart';
 
 class RightSidebar extends StatefulWidget {
-  const RightSidebar({super.key});
+  final VoidCallback onClose;
+  const RightSidebar({super.key, required this.onClose});
 
   @override
   State<RightSidebar> createState() => _RightSidebarState();
 }
 
 class _RightSidebarState extends State<RightSidebar> {
-  bool _open = true;
   double _width = 248;
   String _tab = 'properties'; // 'properties' | 'layers' | 'page'
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<EditorState>();
-    final el = state.selectedElement;
-
-    if (!_open) {
-      return SidebarPill(
-        label: 'PROPS',
-        side: 'right',
-        onTap: () => setState(() => _open = true),
-      );
-    }
-
-    // Auto-switch to Properties tab when an element is selected
-    if (el != null && _tab == 'layers') {
-      // Don't auto-switch — let user stay on the tab they chose
-    }
+    context.watch<EditorState>();
 
     return ResizableSidebar(
       width: _width,
@@ -47,14 +33,14 @@ class _RightSidebarState extends State<RightSidebar> {
           border: Border(left: BorderSide(color: AppColors.border)),
         ),
         child: Column(children: [
-          _buildTabBar(el),
+          _buildTabBar(),
           Expanded(child: _buildTabContent()),
         ]),
       ),
     );
   }
 
-  Widget _buildTabBar(dynamic el) {
+  Widget _buildTabBar() {
     return Container(
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.border)),
@@ -65,7 +51,7 @@ class _RightSidebarState extends State<RightSidebar> {
         _Tab(label: 'Page', active: _tab == 'page', onTap: () => setState(() => _tab = 'page')),
         const SizedBox(width: 4),
         GestureDetector(
-          onTap: () => setState(() => _open = false),
+          onTap: widget.onClose,
           child: Padding(
             padding: const EdgeInsets.all(8),
             child: const Icon(Icons.close, size: 13, color: AppColors.mutedForeground),

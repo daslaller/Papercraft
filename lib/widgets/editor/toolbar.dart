@@ -107,13 +107,17 @@ class EditorToolbar extends StatelessWidget {
                   const _GroupLabel('LAYOUT'),
                   _InsertButton(
                     icon: Icons.table_rows_outlined,
-                    tooltip: 'Row',
-                    onTap: () => state.addElement(ContainerElement.createAbsolute('row')),
+                    tooltip: state.sectionLayoutEnabled
+                        ? 'Row section (flows at top)'
+                        : 'Row (free placement)',
+                    onTap: () => state.addLayoutContainer('row'),
                   ),
                   _InsertButton(
                     icon: Icons.view_column_outlined,
-                    tooltip: 'Column',
-                    onTap: () => state.addElement(ContainerElement.createAbsolute('col')),
+                    tooltip: state.sectionLayoutEnabled
+                        ? 'Column section (flows at top)'
+                        : 'Column (free placement)',
+                    onTap: () => state.addLayoutContainer('col'),
                   ),
                 ]),
               ),

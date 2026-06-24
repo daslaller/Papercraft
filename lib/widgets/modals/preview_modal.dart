@@ -103,6 +103,21 @@ class _PreviewModalState extends State<PreviewModal> {
                         height: canvasH,
                         color: bgColor,
                         child: Stack(children: [
+                          if (widget.elements.any((e) => e.isSection))
+                            Positioned(
+                              top: 0,
+                              left: 0,
+                              right: 0,
+                              child: Column(
+                                children: widget.elements
+                                    .where((e) => e.isSection)
+                                    .map((e) => ElementRenderer(
+                                          el: e as ContainerElement,
+                                          computedFields: _computed,
+                                        ))
+                                    .toList(),
+                              ),
+                            ),
                           ...() {
                             final els = widget.elements
                                 .where((e) => !e.isSection && e.x != null)

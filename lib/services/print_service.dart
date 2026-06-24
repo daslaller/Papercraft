@@ -63,6 +63,8 @@ class PrintService {
       pw.Page(
         pageFormat: pageFormat,
         build: (ctx) {
+          final sections =
+              elements.where((e) => e.isSection).cast<ContainerElement>();
           final sorted = elements
               .where((e) => !e.isSection && e.x != null && e.y != null)
               .toList()
@@ -73,6 +75,19 @@ class PrintService {
             child: pw.Stack(
               children: [
                 pw.Container(color: _hex(template.backgroundColor)),
+                if (sections.isNotEmpty)
+                  pw.Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: pw.Column(
+                      children: sections
+                          .map((e) => _renderElement(
+                              e, fonts, imageCache, record, entityName,
+                              computedFields))
+                          .toList(),
+                    ),
+                  ),
                 ...sorted.map((e) {
                   final child = _renderElement(
                       e, fonts, imageCache, record, entityName, computedFields);
@@ -328,8 +343,15 @@ class PrintService {
     return pw.Opacity(
       opacity: e.opacity,
       child: pw.Container(
-        width: e.width != null ? _pxToPt(e.width!) : null,
-        height: e.height != null ? _pxToPt(e.height!) : null,
+        width: e.isSection
+            ? double.infinity
+            : (e.width != null ? _pxToPt(e.width!) : null),
+        height: e.isSection
+            ? null
+            : (e.height != null ? _pxToPt(e.height!) : null),
+        constraints: e.isSection
+            ? pw.BoxConstraints(minHeight: _pxToPt(e.minHeight))
+            : null,
         decoration: pw.BoxDecoration(
           color: e.gradient == null ? bgColor : null,
           gradient: e.gradient != null ? _pdfGradient(e.gradient!) : null,

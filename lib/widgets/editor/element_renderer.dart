@@ -36,21 +36,105 @@ TextAlign parseTextAlign(String a) {
   };
 }
 
+TextDecoration _parseTextDecoration(String? d) => switch (d) {
+      'underline' => TextDecoration.underline,
+      'lineThrough' => TextDecoration.lineThrough,
+      'overline' => TextDecoration.overline,
+      _ => TextDecoration.none,
+    };
+
 TextStyle textStyleFrom(TextElement el) {
-  final textStyle = GoogleFonts.getFont(
+  return GoogleFonts.getFont(
     _safeFontFamily(el.fontFamily),
     fontSize: el.fontSize,
     fontWeight: parseFontWeight(el.fontWeight),
     fontStyle: el.fontStyle == 'italic' ? FontStyle.italic : FontStyle.normal,
     color: el.textGradient != null ? Colors.transparent : hexToFlutter(el.color),
     height: el.lineHeight,
+    letterSpacing: el.letterSpacing,
+    decoration: el.textDecoration != null ? _parseTextDecoration(el.textDecoration) : null,
   );
-  return textStyle;
 }
 
 String _safeFontFamily(String family) {
   const googleFonts = {'Inter', 'Playfair Display', 'Lora', 'DM Mono'};
   return googleFonts.contains(family) ? family : 'Inter';
+}
+
+// Parses CSS box-shadow string (e.g. "0 4px 12px rgba(0,0,0,0.12), 0 2px 4px rgba(0,0,0,0.08)")
+// into a list of Flutter BoxShadow objects.
+List<BoxShadow>? parseBoxShadow(String? css) {
+  if (css == null || css.isEmpty) return null;
+  try {
+    final parts = css.split(RegExp(r',\s*(?=[\d-])'));
+    return parts.map((s) {
+      final rgbaMatch = RegExp(
+        r'rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)',
+      ).firstMatch(s);
+      final noRgba = s.replaceAll(RegExp(r'rgba\(.*?\)'), '');
+      final nums = RegExp(r'-?[\d.]+').allMatches(noRgba).toList();
+      final dx = nums.isNotEmpty ? double.tryParse(nums[0].group(0)!) ?? 0.0 : 0.0;
+      final dy = nums.length > 1 ? double.tryParse(nums[1].group(0)!) ?? 0.0 : 0.0;
+      final blur = nums.length > 2 ? double.tryParse(nums[2].group(0)!) ?? 0.0 : 0.0;
+      Color color = const Color(0x1A000000);
+      if (rgbaMatch != null) {
+        color = Color.fromRGBO(
+          int.parse(rgbaMatch.group(1)!),
+          int.parse(rgbaMatch.group(2)!),
+          int.parse(rgbaMatch.group(3)!),
+          double.parse(rgbaMatch.group(4)!),
+        );
+      }
+      return BoxShadow(color: color, offset: Offset(dx, dy), blurRadius: blur);
+    }).toList();
+  } catch (_) {
+    return null;
+  }
+}
+
+// Returns the alignSelf value for any element type.
+String? _childAlignSelf(CanvasElement c) => switch (c) {
+      TextElement e => e.alignSelf,
+      ShapeElement e => e.alignSelf,
+      ImageElement e => e.alignSelf,
+      QrElement e => e.alignSelf,
+      BarcodeElement e => e.alignSelf,
+      ContainerElement e => e.alignSelf,
+      _ => null,
+    };
+
+// Wraps a Row child to respect its alignSelf (cross-axis = vertical in a Row).
+Widget _wrapAlignSelfRow(CanvasElement c, Widget child) {
+  final as_ = _childAlignSelf(c);
+  if (as_ == null || as_ == 'auto' || as_ == 'stretch') {
+    return SizedBox(height: double.infinity, child: child);
+  }
+  return Align(
+    alignment: switch (as_) {
+      'flex-start' => Alignment.topLeft,
+      'center' => Alignment.centerLeft,
+      'flex-end' => Alignment.bottomLeft,
+      _ => Alignment.topLeft,
+    },
+    child: child,
+  );
+}
+
+// Wraps a Col child to respect its alignSelf (cross-axis = horizontal in a Col).
+Widget _wrapAlignSelfCol(CanvasElement c, Widget child) {
+  final as_ = _childAlignSelf(c);
+  if (as_ == null || as_ == 'auto' || as_ == 'stretch') {
+    return SizedBox(width: double.infinity, child: child);
+  }
+  return Align(
+    alignment: switch (as_) {
+      'flex-start' => Alignment.topLeft,
+      'center' => Alignment.topCenter,
+      'flex-end' => Alignment.topRight,
+      _ => Alignment.topLeft,
+    },
+    child: child,
+  );
 }
 
 // ── Element widget for preview / canvas (read-only rendering) ────────────────
@@ -199,6 +283,7 @@ class ElementRenderer extends StatelessWidget {
         borderRadius: isCircle
             ? BorderRadius.circular(10000)
             : BorderRadius.circular(e.borderRadius),
+        boxShadow: parseBoxShadow(e.boxShadow),
       );
     }
 
@@ -308,6 +393,7 @@ class ElementRenderer extends StatelessWidget {
               : hexToFlutter(e.background))
           : null,
       borderRadius: BorderRadius.circular(e.borderRadius),
+      boxShadow: parseBoxShadow(e.boxShadow),
     );
 
     Widget content;
@@ -328,11 +414,10 @@ class ElementRenderer extends StatelessWidget {
               }).toList(),
             );
     } else if (isRow) {
-      // ── Row mode: equal-width slices, cross-axis stretch ─────────────────────
-      // Rules:
-      //   • All children share available width via Expanded (default flex = 1 each).
-      //   • Gap is a plain SizedBox between slots — NOT a nested Row/Column.
-      //   • Cross axis (height): stretch to full row height.
+      // ── Row mode ─────────────────────────────────────────────────────────────
+      // Each child shares available width via Expanded (flex weight).
+      // alignSelf on each child controls its vertical position within the row.
+      // CrossAxisAlignment.start lets children control their own alignment.
       if (e.children.isEmpty) {
         content = _emptySlot();
       } else {
@@ -341,24 +426,23 @@ class ElementRenderer extends StatelessWidget {
           if (i > 0) kids.add(SizedBox(width: e.gap));
           final c = e.children[i];
           final flex = _childFlex(c) > 0 ? _childFlex(c) : 1;
+          final renderer = ElementRenderer(
+              el: c, record: record, entityName: entityName, computedFields: computedFields);
           kids.add(Expanded(
             flex: flex,
-            child: ElementRenderer(
-                el: c, record: record, entityName: entityName, computedFields: computedFields),
+            child: _wrapAlignSelfRow(c, renderer),
           ));
         }
         content = Row(
           mainAxisSize: MainAxisSize.max,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: kids,
         );
       }
     } else {
-      // ── Column mode: full-width children, per-child heights ──────────────────
-      // Rules:
-      //   • Children fill full inner width (CrossAxisAlignment.stretch).
-      //   • Height from child.height when set; otherwise intrinsic (text wraps, etc.).
-      //   • Gap is a plain SizedBox between slots.
+      // ── Column mode ──────────────────────────────────────────────────────────
+      // alignSelf on each child controls its horizontal position within the col.
+      // CrossAxisAlignment.start lets children control their own alignment.
       if (e.children.isEmpty) {
         content = _emptySlot();
       } else {
@@ -366,24 +450,24 @@ class ElementRenderer extends StatelessWidget {
         for (int i = 0; i < e.children.length; i++) {
           if (i > 0) kids.add(SizedBox(height: e.gap));
           final c = e.children[i];
+          final renderer = ElementRenderer(
+              el: c, record: record, entityName: entityName, computedFields: computedFields);
           kids.add(SizedBox(
-            width: double.infinity,
-            height: c.height, // null → shrink-wrap to child's intrinsic height
-            child: ElementRenderer(
-                el: c, record: record, entityName: entityName, computedFields: computedFields),
+            height: c.height,
+            child: _wrapAlignSelfCol(c, renderer),
           ));
         }
         content = Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: kids,
         );
       }
     }
 
     return SizedBox(
-      width: e.width,
-      height: e.height,
+      width: e.isSection ? double.infinity : e.width,
+      height: e.isSection ? null : e.height,
       child: Opacity(
         opacity: e.opacity,
         child: Container(
