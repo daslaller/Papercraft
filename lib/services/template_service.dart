@@ -32,6 +32,7 @@ class TemplateService {
     required double widthMm,
     required double heightMm,
     required String ownerId,
+    String? printerName,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final json = prefs.getString(_key) ?? '[]';
@@ -45,6 +46,7 @@ class TemplateService {
       canvasSize: canvasSize,
       canvasWidthMm: widthMm,
       canvasHeightMm: heightMm,
+      printerName: printerName,
       ownerId: ownerId,
       createdDate: now,
       updatedDate: now,
