@@ -160,12 +160,18 @@ class _LeftSidebarState extends State<LeftSidebar> {
     // the user to type anything first.
     _connectedEntity = state.template?.connectedEntity ?? 'orders';
     if (state.template?.connectedEntity == null) {
-      final template = state.template;
-      if (template != null) {
-        state.updateTemplate(template.copyWith(connectedEntity: _connectedEntity));
-      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final s = context.read<EditorState>();
+        final template = s.template;
+        if (template != null) {
+          s.updateTemplate(template.copyWith(connectedEntity: _connectedEntity));
+        }
+        _syncPreviewRecord(s);
+      });
+    } else {
+      _syncPreviewRecord(state);
     }
-    _syncPreviewRecord(state);
     _loadComputed();
   }
 

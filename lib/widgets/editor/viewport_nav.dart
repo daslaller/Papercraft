@@ -62,10 +62,12 @@ class ViewportNav extends StatelessWidget {
               icon: Icons.fit_screen,
               tooltip: 'Fit to view',
               onTap: () {
-                final box = context.findRenderObject() as RenderBox?;
-                if (box != null) {
-                  final size = box.size;
-                  state.fitToView(size.width, size.height);
+                // context.findRenderObject() is the Center pill widget (~44 px
+                // tall). Its parent in the render tree is the workspace Stack —
+                // the correct size to pass to fitToView.
+                final parent = context.findRenderObject()?.parent;
+                if (parent is RenderBox) {
+                  state.fitToView(parent.size.width, parent.size.height);
                 }
               },
             ),
@@ -86,6 +88,18 @@ class ViewportNav extends StatelessWidget {
               active: state.snapEnabled,
               tooltip: 'Toggle snap',
               onTap: state.toggleSnap,
+            ),
+
+            const _NavDivider(),
+
+            // Section layout vs free placement
+            _NavButton(
+              icon: Icons.view_agenda_outlined,
+              active: state.sectionLayoutEnabled,
+              tooltip: state.sectionLayoutEnabled
+                  ? 'Section layout on — rows/cols flow at top'
+                  : 'Free layout — place rows/cols anywhere',
+              onTap: state.toggleSectionLayout,
             ),
 
             const _NavDivider(),

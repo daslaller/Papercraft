@@ -7,6 +7,7 @@ import '../../models/template_model.dart';
 import '../../state/editor_state.dart';
 import '../../theme/app_colors.dart';
 import 'canvas_element_widget.dart';
+import 'element_renderer.dart';
 
 class CanvasWorkspace extends StatefulWidget {
   const CanvasWorkspace({super.key});
@@ -186,12 +187,57 @@ class _CanvasWorkspaceState extends State<CanvasWorkspace> {
   }
 
   Widget _buildSectionContainer(ContainerElement e, EditorState state) {
+    final selected = state.selectedId == e.id;
     return GestureDetector(
       onTap: () => state.select(e.id),
       child: Container(
         width: double.infinity,
         constraints: BoxConstraints(minHeight: e.minHeight),
-        child: const Text('Section Container'),
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: selected
+                ? withAlpha(AppColors.foreground, 0.7)
+                : const Color(0x1A000000),
+            width: selected ? 1.5 : 1,
+            style: selected ? BorderStyle.solid : BorderStyle.none,
+          ),
+        ),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            IgnorePointer(
+              child: ElementRenderer(
+                el: e,
+                record: state.previewMode ? state.previewRecord : null,
+                entityName:
+                    state.previewMode ? state.previewEntityName : null,
+                showTokenChips: !state.previewMode,
+              ),
+            ),
+            Positioned(
+              top: 2,
+              right: 4,
+              child: IgnorePointer(
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: const Color(0xB3FFFFFF),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                  child: Text(
+                    e.type == 'row' ? 'ROW' : 'COL',
+                    style: const TextStyle(
+                      fontSize: 9,
+                      color: Color(0x40000000),
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

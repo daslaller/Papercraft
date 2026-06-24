@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart' show Offset;
 import '../models/element_model.dart';
+import '../models/layout_helpers.dart';
 import '../models/template_model.dart';
 import '../services/template_service.dart';
 
@@ -60,6 +61,7 @@ class EditorState extends ChangeNotifier {
   String? get previewEntityName => _previewEntityName;
   bool get canUndo => _historyIdx > 0;
   bool get canRedo => _historyIdx < _history.length - 1;
+  bool get sectionLayoutEnabled => _template?.sectionLayoutEnabled ?? false;
 
   CanvasElement? get selectedElement {
     if (_selectedChildId != null) {
@@ -170,6 +172,16 @@ class EditorState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setSectionLayoutEnabled(bool enabled) {
+    if (_template == null || _template!.sectionLayoutEnabled == enabled) return;
+    _template = _template!.copyWith(sectionLayoutEnabled: enabled);
+    _scheduleAutoSave();
+    notifyListeners();
+  }
+
+  void toggleSectionLayout() =>
+      setSectionLayoutEnabled(!sectionLayoutEnabled);
+
   void select(String? id) {
     _selectedId = id;
     _selectedChildId = null;
@@ -206,6 +218,13 @@ class EditorState extends ChangeNotifier {
     _pushHistory();
     _scheduleAutoSave();
     notifyListeners();
+  }
+
+  void addLayoutContainer(String type) {
+    final el = sectionLayoutEnabled
+        ? ContainerElement.createSection(type)
+        : ContainerElement.createAbsolute(type);
+    addElement(el);
   }
 
   CanvasElement _withZIndex(CanvasElement el, int z) {
@@ -252,6 +271,16 @@ class EditorState extends ChangeNotifier {
   }
 
   void addChildToContainer(String containerId, CanvasElement child) {
+    final parent = findNodeInTree(_elements, containerId);
+    if (parent is ContainerElement &&
+        !canNestLayoutChild(
+          parentType: parent.type,
+          childType: child.type,
+          parentFreePlacement: parent.freePlacement,
+          sectionLayoutEnabled: sectionLayoutEnabled,
+        )) {
+      return;
+    }
     _elements = addChildDeep(_elements, containerId, child);
     _selectedChildId = child.id;
     _pushHistory();

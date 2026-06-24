@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/element_model.dart';
+import '../../models/layout_helpers.dart';
 import '../../state/editor_state.dart';
 import '../../theme/app_colors.dart';
 
@@ -12,6 +13,7 @@ class LayersTree extends StatelessWidget {
     final state = context.watch<EditorState>();
     final sorted = [...state.elements]
       ..sort((a, b) => b.zIndex.compareTo(a.zIndex));
+    final sectionLayout = state.sectionLayoutEnabled;
 
     return Container(
       decoration: BoxDecoration(
@@ -38,6 +40,7 @@ class LayersTree extends StatelessWidget {
                 .map((e) => _TreeNode(
                       el: e,
                       depth: 0,
+                      sectionLayoutEnabled: sectionLayout,
                       selectedId: state.selectedId,
                       selectedChildId: state.selectedChildId,
                       onSelect: (id, isChild) {
@@ -62,6 +65,7 @@ class LayersTree extends StatelessWidget {
 class _TreeNode extends StatefulWidget {
   final CanvasElement el;
   final int depth;
+  final bool sectionLayoutEnabled;
   final String? selectedId;
   final String? selectedChildId;
   final void Function(String id, bool isChild) onSelect;
@@ -71,6 +75,7 @@ class _TreeNode extends StatefulWidget {
   const _TreeNode({
     required this.el,
     required this.depth,
+    required this.sectionLayoutEnabled,
     required this.selectedId,
     required this.selectedChildId,
     required this.onSelect,
@@ -164,6 +169,7 @@ class _TreeNodeState extends State<_TreeNode> {
                     containerId: widget.el.id,
                     parentType: widget.el.type,
                     freePlacement: (widget.el as ContainerElement).freePlacement,
+                    sectionLayoutEnabled: widget.sectionLayoutEnabled,
                     onAdd: widget.onAddChild,
                   ),
                 const SizedBox(width: 2),
@@ -189,6 +195,7 @@ class _TreeNodeState extends State<_TreeNode> {
           (child) => _TreeNode(
             el: child,
             depth: widget.depth + 1,
+            sectionLayoutEnabled: widget.sectionLayoutEnabled,
             selectedId: widget.selectedId,
             selectedChildId: widget.selectedChildId,
             onSelect: widget.onSelect,
@@ -217,7 +224,10 @@ class _TreeNodeState extends State<_TreeNode> {
           : el.content;
     }
     if (el is ShapeElement) return el.shape;
-    if (el is ContainerElement) return el.type == 'row' ? 'Row' : 'Column';
+    if (el is ContainerElement) {
+      final label = el.type == 'row' ? 'Row' : 'Column';
+      return el.isSection ? '$label (section)' : label;
+    }
     return switch (el.type) {
       'image' => 'Image',
       'qr' => 'QR Code',
@@ -233,12 +243,14 @@ class _AddChildButton extends StatelessWidget {
   final String containerId;
   final String parentType; // 'row' | 'col'
   final bool freePlacement;
+  final bool sectionLayoutEnabled;
   final void Function(String containerId, CanvasElement child) onAdd;
 
   const _AddChildButton({
     required this.containerId,
     required this.parentType,
     required this.freePlacement,
+    required this.sectionLayoutEnabled,
     required this.onAdd,
   });
 
@@ -262,12 +274,16 @@ class _AddChildButton extends StatelessWidget {
     final RenderBox box = context.findRenderObject() as RenderBox;
     final offset = box.localToGlobal(Offset.zero);
 
-    // ── Alternating-axis rule ─────────────────────────────────────────────────
-    // row parent  → may add Column + primitives (NOT Row)
-    // col parent  → may add Row + primitives (NOT Column)
-    // free parent → may add everything
-    final canAddRow = parentType != 'row' || freePlacement;
-    final canAddCol = parentType != 'col' || freePlacement;
+    final canAddRow = canAddRowToParent(
+      parentType: parentType,
+      parentFreePlacement: freePlacement,
+      sectionLayoutEnabled: sectionLayoutEnabled,
+    );
+    final canAddCol = canAddColToParent(
+      parentType: parentType,
+      parentFreePlacement: freePlacement,
+      sectionLayoutEnabled: sectionLayoutEnabled,
+    );
 
     final primitiveItems = <PopupMenuEntry<String>>[
       const PopupMenuItem(value: 'text',    height: 32, child: _MenuRow(icon: Icons.text_fields,       label: 'Text')),
@@ -289,14 +305,20 @@ class _AddChildButton extends StatelessWidget {
             child: _MenuRow(icon: Icons.view_column_outlined, label: 'Column')),
     ];
 
+    final screenSize = MediaQuery.sizeOf(context);
     final result = await showMenu<String>(
       context: context,
       color: AppColors.card,
-      position: RelativeRect.fromLTRB(
-        offset.dx,
-        offset.dy + box.size.height + 4,
-        offset.dx + 160,
-        offset.dy + box.size.height + 260,
+      // RelativeRect right/bottom are distances FROM the screen edges, not
+      // absolute coords — use fromRect to avoid the menu appearing at (0,0).
+      position: RelativeRect.fromRect(
+        Rect.fromLTWH(
+          offset.dx,
+          offset.dy + box.size.height + 4,
+          160,
+          260,
+        ),
+        Offset.zero & screenSize,
       ),
       items: [...primitiveItems, ...containerItems],
     );
