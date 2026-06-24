@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 import '../../models/template_model.dart';
 import '../../services/auth_service.dart';
@@ -14,15 +15,24 @@ class NewTemplateModal extends StatefulWidget {
 
 class _NewTemplateModalState extends State<NewTemplateModal> {
   final _nameCtrl = TextEditingController();
+
+  // 'label' | 'document' | 'printer'
   String _docType = 'label';
   String _sizeKey = '4x6';
   double _customW = 100;
   double _customH = 100;
   bool _creating = false;
 
+  // Printer flow
+  List<Printer> _printers = [];
+  bool _loadingPrinters = false;
+  Printer? _selectedPrinter;
+
   List<CanvasSize> get _filteredSizes {
-    return kCanvasSizes.where((s) =>
-        s.category == _docType || s.category == 'both').toList();
+    if (_docType == 'printer') {
+      return kCanvasSizes.where((s) => s.category == 'both' || s.category == 'document').toList();
+    }
+    return kCanvasSizes.where((s) => s.category == _docType || s.category == 'both').toList();
   }
 
   @override
@@ -31,8 +41,21 @@ class _NewTemplateModalState extends State<NewTemplateModal> {
     super.dispose();
   }
 
+  Future<void> _loadPrinters() async {
+    setState(() => _loadingPrinters = true);
+    try {
+      final list = await Printing.listPrinters();
+      if (mounted) setState(() => _printers = list);
+    } catch (_) {
+      if (mounted) setState(() => _printers = []);
+    } finally {
+      if (mounted) setState(() => _loadingPrinters = false);
+    }
+  }
+
   Future<void> _create() async {
     if (_nameCtrl.text.trim().isEmpty) return;
+    if (_docType == 'printer' && _selectedPrinter == null) return;
     setState(() => _creating = true);
     final user = context.read<AuthService>().user;
     if (user == null) return;
@@ -47,13 +70,16 @@ class _NewTemplateModalState extends State<NewTemplateModal> {
       hMm = size.heightMm;
     }
 
+    final resolvedDocType = _docType == 'printer' ? 'document' : _docType;
+
     final template = await TemplateService.create(
       name: _nameCtrl.text.trim(),
-      docType: _docType,
+      docType: resolvedDocType,
       canvasSize: _sizeKey,
       widthMm: wMm,
       heightMm: hMm,
       ownerId: user.id,
+      printerName: _docType == 'printer' ? _selectedPrinter?.name : null,
     );
     if (!mounted) return;
     Navigator.of(context).pop(template);
@@ -77,233 +103,364 @@ class _NewTemplateModalState extends State<NewTemplateModal> {
               maxHeight: MediaQuery.of(context).size.height * 0.9,
             ),
             child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header
-              Padding(
-                padding: const EdgeInsets.fromLTRB(32, 32, 32, 24),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(32, 32, 32, 24),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('New Template',
+                                style: Theme.of(context).textTheme.headlineMedium),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Choose a type and size to get started.',
+                              style: TextStyle(
+                                  fontSize: 14,
+                                  color: AppColors.mutedForeground),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1, color: AppColors.border),
+                // Content
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('New Template',
-                              style: Theme.of(context).textTheme.headlineMedium),
-                          const SizedBox(height: 4),
-                          const Text(
-                            'Choose a type and size to get started.',
-                            style: TextStyle(
-                                fontSize: 14,
-                                color: AppColors.mutedForeground),
+                          _sectionLabel('TEMPLATE NAME'),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _nameCtrl,
+                            autofocus: true,
+                            onSubmitted: (_) => _create(),
+                            decoration: InputDecoration(
+                              hintText: 'e.g. Shipping Label, Invoice…',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide:
+                                    const BorderSide(color: AppColors.border),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 12),
+                            ),
                           ),
+                          const SizedBox(height: 24),
+                          _sectionLabel('DOCUMENT TYPE'),
+                          const SizedBox(height: 8),
+                          Row(children: [
+                            Expanded(
+                              child: _TypeOption(
+                                icon: Icons.label_outline,
+                                title: 'Label / Sticker',
+                                desc: 'Free-position canvas for labels and stickers',
+                                selected: _docType == 'label',
+                                onTap: () => setState(() {
+                                  _docType = 'label';
+                                  _sizeKey = '4x6';
+                                  _selectedPrinter = null;
+                                }),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: _TypeOption(
+                                icon: Icons.description_outlined,
+                                title: 'Document',
+                                desc: 'Letter, invoice, certificate, or report',
+                                selected: _docType == 'document',
+                                onTap: () => setState(() {
+                                  _docType = 'document';
+                                  _sizeKey = 'A4';
+                                  _selectedPrinter = null;
+                                }),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: _TypeOption(
+                                icon: Icons.print_outlined,
+                                title: 'From Printer',
+                                desc: 'Pick an installed printer to set size',
+                                selected: _docType == 'printer',
+                                onTap: () {
+                                  setState(() {
+                                    _docType = 'printer';
+                                    _sizeKey = 'A4';
+                                    _selectedPrinter = null;
+                                  });
+                                  _loadPrinters();
+                                },
+                              ),
+                            ),
+                          ]),
+                          // Printer picker (only when 'printer' selected)
+                          if (_docType == 'printer') ...[
+                            const SizedBox(height: 20),
+                            _sectionLabel('SELECT PRINTER'),
+                            const SizedBox(height: 8),
+                            _buildPrinterPicker(),
+                          ],
+                          const SizedBox(height: 24),
+                          _sectionLabel('CANVAS SIZE'),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: _filteredSizes.map((size) {
+                              final active = _sizeKey == size.key;
+                              return GestureDetector(
+                                onTap: () => setState(() => _sizeKey = size.key),
+                                child: Container(
+                                  width: 120,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: active
+                                        ? AppColors.accent
+                                        : Colors.transparent,
+                                    border: Border.all(
+                                      color: active
+                                          ? AppColors.accent
+                                          : AppColors.border,
+                                    ),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Column(children: [
+                                    Text(
+                                      size.label,
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: active
+                                              ? AppColors.accentForeground
+                                              : AppColors.foreground),
+                                    ),
+                                    if (size.key != 'custom') ...[
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '${size.widthMm.toStringAsFixed(0)}×${size.heightMm.toStringAsFixed(0)}mm',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                            fontSize: 9,
+                                            color: active
+                                                ? AppColors.accentForeground
+                                                    .withValues(alpha: 0.7)
+                                                : AppColors.mutedForeground),
+                                      ),
+                                    ],
+                                  ]),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                          if (_sizeKey == 'custom') ...[
+                            const SizedBox(height: 12),
+                            Row(children: [
+                              Expanded(
+                                  child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('Width (mm)',
+                                      style: TextStyle(
+                                          fontSize: 10,
+                                          color: AppColors.mutedForeground)),
+                                  const SizedBox(height: 4),
+                                  TextField(
+                                    keyboardType: TextInputType.number,
+                                    onChanged: (v) => setState(
+                                        () => _customW = double.tryParse(v) ?? _customW),
+                                    decoration: InputDecoration(
+                                      border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(8)),
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                              horizontal: 12, vertical: 8),
+                                      hintText: '100',
+                                    ),
+                                  ),
+                                ],
+                              )),
+                              const Padding(
+                                  padding: EdgeInsets.fromLTRB(12, 20, 12, 0),
+                                  child: Text('×',
+                                      style: TextStyle(
+                                          color: AppColors.mutedForeground))),
+                              Expanded(
+                                  child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('Height (mm)',
+                                      style: TextStyle(
+                                          fontSize: 10,
+                                          color: AppColors.mutedForeground)),
+                                  const SizedBox(height: 4),
+                                  TextField(
+                                    keyboardType: TextInputType.number,
+                                    onChanged: (v) => setState(
+                                        () => _customH = double.tryParse(v) ?? _customH),
+                                    decoration: InputDecoration(
+                                      border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(8)),
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                              horizontal: 12, vertical: 8),
+                                      hintText: '100',
+                                    ),
+                                  ),
+                                ],
+                              )),
+                            ]),
+                          ],
                         ],
                       ),
                     ),
-                    IconButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-              const Divider(height: 1, color: AppColors.border),
-              // Content
-              Flexible(
-               child: SingleChildScrollView(
-                child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _sectionLabel('TEMPLATE NAME'),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _nameCtrl,
-                      autofocus: true,
-                      onSubmitted: (_) => _create(),
-                      decoration: InputDecoration(
-                        hintText: 'e.g. Shipping Label, Invoice…',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: AppColors.border),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 12),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    _sectionLabel('DOCUMENT TYPE'),
-                    const SizedBox(height: 8),
-                    Row(children: [
-                      Expanded(child: _TypeOption(
-                        icon: Icons.label_outline,
-                        title: 'Label / Sticker',
-                        desc: 'Free-position canvas for labels and stickers',
-                        selected: _docType == 'label',
-                        onTap: () => setState(() {
-                          _docType = 'label';
-                          _sizeKey = '4x6';
-                        }),
-                      )),
-                      const SizedBox(width: 12),
-                      Expanded(child: _TypeOption(
-                        icon: Icons.description_outlined,
-                        title: 'Formal Document',
-                        desc: 'Letter, invoice, certificate, or report',
-                        selected: _docType == 'document',
-                        onTap: () => setState(() {
-                          _docType = 'document';
-                          _sizeKey = 'A4';
-                        }),
-                      )),
-                    ]),
-                    const SizedBox(height: 24),
-                    _sectionLabel('CANVAS SIZE'),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _filteredSizes.map((size) {
-                        final active = _sizeKey == size.key;
-                        return GestureDetector(
-                          onTap: () => setState(() => _sizeKey = size.key),
-                          child: Container(
-                            width: 120,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: active ? AppColors.accent : Colors.transparent,
-                              border: Border.all(
-                                color: active ? AppColors.accent : AppColors.border,
-                              ),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Column(children: [
-                              Text(
-                                size.label,
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: active
-                                        ? AppColors.accentForeground
-                                        : AppColors.foreground),
-                              ),
-                              if (size.key != 'custom') ...[
-                                const SizedBox(height: 2),
-                                Text(
-                                  '${size.widthMm.toStringAsFixed(0)}×${size.heightMm.toStringAsFixed(0)}mm',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                      fontSize: 9,
-                                      color: active
-                                          ? AppColors.accentForeground
-                                              .withValues(alpha: 0.7)
-                                          : AppColors.mutedForeground),
-                                ),
-                              ],
-                            ]),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                    if (_sizeKey == 'custom') ...[
-                      const SizedBox(height: 12),
-                      Row(children: [
-                        Expanded(child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Width (mm)',
-                                style: TextStyle(fontSize: 10, color: AppColors.mutedForeground)),
-                            const SizedBox(height: 4),
-                            TextField(
-                              keyboardType: TextInputType.number,
-                              onChanged: (v) => setState(() => _customW = double.tryParse(v) ?? _customW),
-                              decoration: InputDecoration(
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                hintText: '100',
-                              ),
-                            ),
-                          ],
-                        )),
-                        const Padding(
-                            padding: EdgeInsets.fromLTRB(12, 20, 12, 0),
-                            child: Text('×', style: TextStyle(color: AppColors.mutedForeground))),
-                        Expanded(child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Height (mm)',
-                                style: TextStyle(fontSize: 10, color: AppColors.mutedForeground)),
-                            const SizedBox(height: 4),
-                            TextField(
-                              keyboardType: TextInputType.number,
-                              onChanged: (v) => setState(() => _customH = double.tryParse(v) ?? _customH),
-                              decoration: InputDecoration(
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                hintText: '100',
-                              ),
-                            ),
-                          ],
-                        )),
-                      ]),
-                    ],
-                  ],
-                ),
-              ), // Padding
-              )), // SingleChildScrollView + Flexible
-              // Footer
-              Padding(
-                padding: const EdgeInsets.fromLTRB(32, 0, 32, 32),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    OutlinedButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 10),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                      ),
-                      child: const Text('Cancel'),
-                    ),
-                    const SizedBox(width: 12),
-                    ValueListenableBuilder(
-                      valueListenable: _nameCtrl,
-                      builder: (_, __, ___) => FilledButton(
-                        onPressed: (_nameCtrl.text.trim().isEmpty || _creating)
-                            ? null
-                            : _create,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.accent,
+                // Footer
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(32, 0, 32, 32),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 24, vertical: 10),
+                              horizontal: 20, vertical: 10),
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12)),
                         ),
-                        child: _creating
-                            ? const SizedBox(
-                                width: 14,
-                                height: 14,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2, color: Colors.white))
-                            : const Text('Create Template',
-                                style: TextStyle(fontWeight: FontWeight.w600)),
+                        child: const Text('Cancel'),
+                      ),
+                      const SizedBox(width: 12),
+                      ValueListenableBuilder(
+                        valueListenable: _nameCtrl,
+                        builder: (_, __, ___) {
+                          final disabled = _nameCtrl.text.trim().isEmpty ||
+                              _creating ||
+                              (_docType == 'printer' && _selectedPrinter == null);
+                          return FilledButton(
+                            onPressed: disabled ? null : _create,
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.accent,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 24, vertical: 10),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: _creating
+                                ? const SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white))
+                                : const Text('Create Template',
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.w600)),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPrinterPicker() {
+    if (_loadingPrinters) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      );
+    }
+    if (_printers.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.border),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: const Text(
+          'No printers found. Make sure a printer is installed and try again.',
+          style: TextStyle(fontSize: 12, color: AppColors.mutedForeground),
+        ),
+      );
+    }
+    return Column(
+      children: _printers.map((p) {
+        final selected = _selectedPrinter?.name == p.name;
+        return GestureDetector(
+          onTap: () => setState(() {
+            _selectedPrinter = p;
+            // Auto-select A4 for default size; user can change below
+            _sizeKey = 'A4';
+          }),
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: selected ? withAlpha(AppColors.accent, 0.08) : Colors.transparent,
+              border: Border.all(
+                color: selected ? AppColors.accent : AppColors.border,
+                width: selected ? 1.5 : 1,
+              ),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(children: [
+              Icon(
+                p.isDefault ? Icons.print : Icons.print_outlined,
+                size: 16,
+                color: selected ? AppColors.accent : AppColors.mutedForeground,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      p.name,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: selected ? AppColors.accent : AppColors.foreground,
                       ),
                     ),
+                    if (p.isDefault)
+                      const Text('Default printer',
+                          style: TextStyle(fontSize: 10, color: AppColors.mutedForeground)),
                   ],
                 ),
               ),
-            ],
-          ), // Column
-          ), // ConstrainedBox
-        ),
-      ),
+              if (selected)
+                Icon(Icons.check_circle, size: 16, color: AppColors.accent),
+            ]),
+          ),
+        );
+      }).toList(),
     );
   }
 
@@ -337,7 +494,7 @@ class _TypeOption extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: selected ? withAlpha(AppColors.accent, 0.05) : Colors.transparent,
           border: Border.all(
@@ -348,16 +505,16 @@ class _TypeOption extends StatelessWidget {
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Icon(icon,
-              size: 20,
+              size: 18,
               color: selected ? AppColors.accent : AppColors.mutedForeground),
           const SizedBox(height: 8),
           Text(title,
               style: const TextStyle(
-                  fontSize: 14, fontWeight: FontWeight.w600)),
+                  fontSize: 12, fontWeight: FontWeight.w600)),
           const SizedBox(height: 2),
           Text(desc,
               style: const TextStyle(
-                  fontSize: 11, color: AppColors.mutedForeground)),
+                  fontSize: 10, color: AppColors.mutedForeground)),
         ]),
       ),
     );
