@@ -50,7 +50,7 @@ class _SectionHeaderState extends State<_SectionHeader> {
                       color: AppColors.mutedForeground)),
             ),
             Text(_open ? '›' : '›',
-                style: TextStyle(
+                style: const TextStyle(
                     fontSize: 12,
                     color: AppColors.mutedForeground,
                     fontWeight: FontWeight.w300,
@@ -819,21 +819,10 @@ class PropertiesPanel extends StatelessWidget {
 
   Widget _buildLayoutSection(
       ContainerElement el, void Function(CanvasElement) update) {
-    // Three-way axis control: Row | Column | Free
-    final mode = el.freePlacement ? 'free' : el.type; // 'row' | 'col' | 'free'
-
-    void setMode(String m) {
-      if (m == 'free') {
-        update(el.copyWith(freePlacement: true));
-      } else {
-        update(el.copyWith(type: m, freePlacement: false));
-      }
-    }
-
     return _SectionHeader(
       title: 'Layout',
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // Axis / mode selector
+        // Axis selector: Row | Column
         const _Label('Axis'),
         const SizedBox(height: 4),
         Container(
@@ -843,27 +832,53 @@ class PropertiesPanel extends StatelessWidget {
           ),
           padding: const EdgeInsets.all(2),
           child: Row(children: [
-            _ModeBtn(label: '↔ Row',    value: 'row',  current: mode, onTap: setMode),
-            _ModeBtn(label: '↕ Column', value: 'col',  current: mode, onTap: setMode),
-            _ModeBtn(label: '⊞ Free',   value: 'free', current: mode, onTap: setMode),
+            _ModeBtn(label: '↔ Row',    value: 'row', current: el.type, onTap: (m) => update(el.copyWith(type: m))),
+            _ModeBtn(label: '↕ Column', value: 'col', current: el.type, onTap: (m) => update(el.copyWith(type: m))),
           ]),
         ),
-        if (!el.freePlacement) ...[
-          const SizedBox(height: 12),
-          Row(children: [
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const _Label('Gap'),
-              _NumInput(value: el.gap, min: 0, max: 100,
-                  onChanged: (v) => update(el.copyWith(gap: v))),
-            ])),
-            const SizedBox(width: 8),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const _Label('Padding'),
-              _NumInput(value: el.padding, min: 0, max: 80,
-                  onChanged: (v) => update(el.copyWith(padding: v))),
-            ])),
-          ]),
-        ],
+        const SizedBox(height: 12),
+        // Section toggle — individual override; global setting is the new-element default
+        Row(children: [
+          const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _Label('Section layout'),
+            Text(
+              'Flows with document instead of free position',
+              style: TextStyle(fontSize: 9, color: AppColors.mutedForeground, height: 1.4),
+            ),
+          ])),
+          const SizedBox(width: 8),
+          _ToggleButton(
+            on: el.isSection,
+            onTap: () {
+              if (el.isSection) {
+                // Switching to absolute: give it a position if it doesn't have one
+                update(el.copyWith(
+                  isSection: false,
+                  x: el.x ?? 20,
+                  y: el.y ?? 20,
+                  width: el.width ?? 200,
+                  height: el.height ?? 80,
+                ));
+              } else {
+                update(el.copyWith(isSection: true));
+              }
+            },
+          ),
+        ]),
+        const SizedBox(height: 12),
+        Row(children: [
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const _Label('Gap'),
+            _NumInput(value: el.gap, min: 0, max: 100,
+                onChanged: (v) => update(el.copyWith(gap: v))),
+          ])),
+          const SizedBox(width: 8),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const _Label('Padding'),
+            _NumInput(value: el.padding, min: 0, max: 80,
+                onChanged: (v) => update(el.copyWith(padding: v))),
+          ])),
+        ]),
         const SizedBox(height: 12),
         const _Label('Background'),
         const SizedBox(height: 4),

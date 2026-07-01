@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../models/element_model.dart';
 import '../../state/editor_state.dart';
 import '../../theme/app_colors.dart';
@@ -173,6 +174,12 @@ class _CanvasElementWidgetState extends State<CanvasElementWidget> {
     if (e.buttons != 1) return; // Left button only
     widget.onSelect();
 
+    // Tell workspace pan to stand down — this pointer is an element drag.
+    // Child Listeners fire before parent, so this is set before the workspace
+    // checks elementDragActive in its own onPointerDown handler.
+    final editorState = context.read<EditorState>();
+    editorState.startElementDrag();
+
     _startMx = e.position.dx;
     _startMy = e.position.dy;
     _startX = elX;
@@ -185,6 +192,7 @@ class _CanvasElementWidgetState extends State<CanvasElementWidget> {
       onPointerMove: _onDragMove,
       onPointerUp: (_) {
         _onDragEnd();
+        editorState.endElementDrag();
         entry.remove();
       },
       child: const SizedBox.expand(),
