@@ -18,7 +18,12 @@ import '../widgets/modals/print_preview_modal.dart';
 class EditorScreen extends StatefulWidget {
   final String templateId;
 
-  const EditorScreen({super.key, required this.templateId});
+  /// Called when the user presses the back/close button in the toolbar.
+  /// Defaults to [Navigator.maybePop] so it works without GoRouter.
+  /// Pass `() => context.go('/')` when using this inside the app's own router.
+  final VoidCallback? onBack;
+
+  const EditorScreen({super.key, required this.templateId, this.onBack});
 
   @override
   State<EditorScreen> createState() => _EditorScreenState();
@@ -41,7 +46,7 @@ class _EditorScreenState extends State<EditorScreen> {
     await _state.load(widget.templateId);
     if (!mounted) return;
     if (_state.template == null) {
-      context.go('/');
+      _goBack();
       return;
     }
     setState(() => _loading = false);
@@ -68,7 +73,7 @@ class _EditorScreenState extends State<EditorScreen> {
         backgroundColor: AppColors.background,
         body: Column(children: [
           EditorToolbar(
-            onBack: () => context.go('/'),
+            onBack: _goBack,
             onPreview: _openPreview,
             onExportPdf: _openPrintPreview,
           ),
@@ -132,6 +137,14 @@ class _EditorScreenState extends State<EditorScreen> {
         ]),
       ),
     );
+  }
+
+  void _goBack() {
+    if (widget.onBack != null) {
+      widget.onBack!();
+    } else {
+      Navigator.of(context).maybePop();
+    }
   }
 
   void _openPreview() {

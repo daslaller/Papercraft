@@ -88,6 +88,12 @@ class EditorState extends ChangeNotifier {
   Future<void> load(String templateId) async {
     final t = await TemplateService.getById(templateId);
     if (t == null) return;
+    loadFromTemplate(t);
+  }
+
+  /// Load directly from a [Template] object — used by [PapercraftEditor] when
+  /// a custom [PapercraftStorage] is provided.
+  void loadFromTemplate(Template t) {
     _template = t;
     _elements = elementsFromJson(t.elements);
     _pushHistory();

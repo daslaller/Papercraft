@@ -60,6 +60,63 @@ String? _encode128B(String value) {
   return buffer.toString();
 }
 
+/// Detects barcode format from content — mirrors PrintService._detectBarcode.
+/// Returns: 'ean13' | 'ean8' | 'upca' | 'qr' | 'code128'
+String detectBarcodeFormat(String content) {
+  final onlyDigits = RegExp(r'^\d+$').hasMatch(content);
+  if (onlyDigits) {
+    if (content.length == 13) return 'ean13';
+    if (content.length == 8)  return 'ean8';
+    if (content.length == 12) return 'upca';
+  }
+  if (content.startsWith('http') || content.length > 25) return 'qr';
+  return 'code128';
+}
+
+// EAN-13 encoding tables
+const _eanLeft_A = ['0001101','0011001','0010011','0111101','0100011',
+                    '0110001','0101111','0111011','0110111','0001011'];
+const _eanLeft_B = ['0100111','0110011','0011011','0100001','0011101',
+                    '0111001','0000101','0010001','0001001','0010111'];
+const _eanRight  = ['1110010','1100110','1101100','1000010','1011100',
+                    '1001110','1010000','1000100','1001000','1110100'];
+// First-digit parity patterns for EAN-13
+const _eanParity = ['AAAAAA','AABABB','AABBAB','AABBBA','ABAABB',
+                    'ABBAAB','ABBBAA','ABABAB','ABABBA','ABBABA'];
+
+String? _encodeEan13(String value) {
+  if (value.length != 13) return null;
+  final digits = value.split('').map(int.tryParse).toList();
+  if (digits.any((d) => d == null)) return null;
+  final d = digits.cast<int>();
+
+  final parity = _eanParity[d[0]];
+  final buf = StringBuffer('101'); // start guard
+  for (int i = 0; i < 6; i++) {
+    buf.write(parity[i] == 'A' ? _eanLeft_A[d[i + 1]] : _eanLeft_B[d[i + 1]]);
+  }
+  buf.write('01010'); // centre guard
+  for (int i = 7; i < 13; i++) {
+    buf.write(_eanRight[d[i]]);
+  }
+  buf.write('101'); // end guard
+  return buf.toString();
+}
+
+String? _encodeEan8(String value) {
+  if (value.length != 8) return null;
+  final digits = value.split('').map(int.tryParse).toList();
+  if (digits.any((d) => d == null)) return null;
+  final d = digits.cast<int>();
+
+  final buf = StringBuffer('101');
+  for (int i = 0; i < 4; i++) buf.write(_eanLeft_A[d[i]]);
+  buf.write('01010');
+  for (int i = 4; i < 8; i++) buf.write(_eanRight[d[i]]);
+  buf.write('101');
+  return buf.toString();
+}
+
 class BarcodePainter extends CustomPainter {
   final BarcodeElement el;
 
@@ -74,7 +131,26 @@ class BarcodePainter extends CustomPainter {
     final bgColor = _parseColor(el.background) ?? Colors.white;
     canvas.drawRect(Rect.fromLTWH(0, 0, w, h), Paint()..color = bgColor);
 
-    final binary = _encode128B(el.content);
+    final format = detectBarcodeFormat(el.content);
+    String? binary;
+    if (format == 'ean13') {
+      binary = _encodeEan13(el.content);
+    } else if (format == 'ean8') {
+      binary = _encodeEan8(el.content);
+    } else if (format == 'upca') {
+      // UPC-A is EAN-13 with a leading '0'
+      binary = _encodeEan13('0${el.content}');
+    } else {
+      binary = _encode128B(el.content);
+    }
+
+    // QR: show placeholder (real QR render happens in PDF via pw.Barcode.qrCode)
+    if (format == 'qr') {
+      _drawQrPlaceholder(canvas, size, el.content,
+          _parseColor(el.color) ?? Colors.black);
+      return;
+    }
+
     if (binary == null || binary.isEmpty) {
       // Invalid
       final p = Paint()..color = const Color(0xFFCCCCCC);
@@ -116,6 +192,32 @@ class BarcodePainter extends CustomPainter {
         textAlign: TextAlign.center,
       )..layout(maxWidth: w);
       tp.paint(canvas, Offset((w - tp.width) / 2, h - 13));
+    }
+  }
+
+  void _drawQrPlaceholder(Canvas canvas, Size size, String content, Color color) {
+    // Draw a simple QR-like grid placeholder for the canvas preview.
+    // The PDF renderer uses pw.Barcode.qrCode() for the real thing.
+    final paint = Paint()..color = color;
+    final cellSize = (size.width / 10).clamp(2.0, 8.0);
+    // Draw finder pattern corners
+    for (final (ox, oy) in [(0.0, 0.0), (size.width - cellSize * 7, 0.0),
+                             (0.0, size.height - cellSize * 7)]) {
+      canvas.drawRect(Rect.fromLTWH(ox, oy, cellSize * 7, cellSize * 7),
+          Paint()..color = color..style = PaintingStyle.stroke..strokeWidth = cellSize);
+      canvas.drawRect(Rect.fromLTWH(ox + cellSize * 2, oy + cellSize * 2,
+          cellSize * 3, cellSize * 3), paint);
+    }
+    if (el.displayValue) {
+      final tp = TextPainter(
+        text: TextSpan(
+          text: content.length > 16 ? '${content.substring(0, 16)}…' : content,
+          style: TextStyle(fontSize: 9, color: color),
+        ),
+        textDirection: TextDirection.ltr,
+        textAlign: TextAlign.center,
+      )..layout(maxWidth: size.width);
+      tp.paint(canvas, Offset((size.width - tp.width) / 2, size.height - 12));
     }
   }
 

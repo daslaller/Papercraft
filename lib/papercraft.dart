@@ -1,32 +1,79 @@
-/// Papercraft — drop-in Flutter label/document designer for RepairX and other apps.
+/// Papercraft — drop-in Flutter label/document designer.
 ///
 /// ─────────────────────────────────────────────────────────────────────────────
 /// QUICK START
 /// ─────────────────────────────────────────────────────────────────────────────
 ///
-/// 1. Add the package to your app's pubspec.yaml:
+/// 1. Add to your app's pubspec.yaml:
 ///
 ///      dependencies:
-///        papercraft:
+///        base44_flutter_label_creator:
 ///          path: ../base44_flutter_label_creator
 ///
-/// 2. Import the barrel:
+/// 2. Import the single barrel:
 ///
 ///      import 'package:base44_flutter_label_creator/papercraft.dart';
 ///
-/// 3. Register your data adapter at startup (optional — shows live records
-///    from your back-end instead of the built-in sample data):
+/// 3. Register your data adapter once at startup (optional):
 ///
 ///      void main() {
-///        AdapterRegistry.register(RepairXAppwriteAdapter());
+///        AdapterRegistry.register(RepairXAdapter(databases));
 ///        runApp(MyApp());
 ///      }
 ///
 /// ─────────────────────────────────────────────────────────────────────────────
-/// OPENING THE EDITOR
+/// WIDGET API  (recommended — no GoRouter required)
 /// ─────────────────────────────────────────────────────────────────────────────
 ///
-///   // 1. Create a template (stored in SharedPreferences):
+/// [PapercraftEditor] is a self-contained widget. Put it anywhere:
+///
+///   // Full-page via plain Navigator:
+///   Navigator.push(context, MaterialPageRoute(
+///     builder: (_) => Scaffold(
+///       body: PapercraftEditor(
+///         templateId: template.id,
+///         onClose: () => Navigator.pop(context),
+///         onSaved: (id) => myState.refresh(),
+///       ),
+///     ),
+///   ));
+///
+///   // Embedded alongside your own UI:
+///   Row(children: [
+///     MyRepairXSidebar(),
+///     Expanded(
+///       child: PapercraftEditor(
+///         templateId: id,
+///         showDataSidebar: false,   // hide if RepairX supplies the record
+///       ),
+///     ),
+///   ]);
+///
+/// ─────────────────────────────────────────────────────────────────────────────
+/// SCREEN API  (for GoRouter users)
+/// ─────────────────────────────────────────────────────────────────────────────
+///
+/// [EditorScreen] wraps [PapercraftEditor] in a [Scaffold] and requires an
+/// explicit [onBack] callback — it no longer assumes any routing setup:
+///
+///   // Inside a GoRouter route:
+///   GoRoute(
+///     path: '/editor/:id',
+///     builder: (ctx, state) => EditorScreen(
+///       templateId: state.pathParameters['id']!,
+///       onBack: () => ctx.go('/templates'),
+///     ),
+///   )
+///
+///   // Or with plain Navigator (onBack defaults to Navigator.maybePop):
+///   Navigator.push(context, MaterialPageRoute(
+///     builder: (_) => EditorScreen(templateId: id),
+///   ));
+///
+/// ─────────────────────────────────────────────────────────────────────────────
+/// CREATING A TEMPLATE
+/// ─────────────────────────────────────────────────────────────────────────────
+///
 ///   final template = await TemplateService.create(
 ///     name: 'Repair Ticket',
 ///     docType: 'document',        // 'label' | 'document'
@@ -34,30 +81,24 @@
 ///     widthMm: 210,
 ///     heightMm: 297,
 ///     ownerId: currentUserId,
-///     printerName: 'HP LaserJet',  // optional — links template to a printer
+///     printerName: 'HP LaserJet', // optional — associates template with printer
 ///   );
 ///
-///   // 2. Push the editor screen:
-///   Navigator.push(context, MaterialPageRoute(
-///     builder: (_) => EditorScreen(templateId: template.id),
-///   ));
-///
 /// ─────────────────────────────────────────────────────────────────────────────
-/// GENERATING A PDF PROGRAMMATICALLY
+/// BATCH PDF / SILENT PRINT  (no editor UI needed)
 /// ─────────────────────────────────────────────────────────────────────────────
 ///
-///   // Useful for batch printing from RepairX without opening the editor:
-///   final Uint8List pdfBytes = await PrintService.buildPdf(
+///   final Uint8List bytes = await PrintService.buildPdf(
 ///     template: template,
-///     elements: template.elements,   // already serialised in the Template
-///     record: {                       // flat map — keys must match {{tokens}}
+///     elements: template.elements,
+///     record: {                        // flat map — keys match {{tokens}}
 ///       'product.name': 'iPhone 15 Screen',
 ///       'order.number': 'WO-4821',
 ///       'customer.name': 'John Smith',
 ///     },
 ///   );
 ///
-///   // Print directly (opens OS print dialog):
+///   // Or open the OS print dialog directly:
 ///   await PrintService.printDirect(
 ///     template: template,
 ///     elements: template.elements,
@@ -65,11 +106,10 @@
 ///   );
 ///
 /// ─────────────────────────────────────────────────────────────────────────────
-/// DATA ADAPTER — wiring in your back-end
+/// DATA ADAPTER  (wiring your back-end)
 /// ─────────────────────────────────────────────────────────────────────────────
 ///
-///   // Extend AppwriteAdapterBase (or implement DataSourceAdapter directly):
-///
+///   // Extend the Appwrite stub — only implement the two abstract methods:
 ///   class RepairXAdapter extends AppwriteAdapterBase {
 ///     final Databases _db;
 ///     RepairXAdapter(this._db);
@@ -91,17 +131,16 @@
 ///       );
 ///       return docs.documents.map((d) => DataRecord(
 ///         displayName: d.data['title'] ?? d.$id,
-///         subtitle: d.data['status'] ?? '',
-///         flat: _flatten(d.data),  // see _flatten() below
+///         subtitle:    d.data['status'] ?? '',
+///         flat:        _flatten(d.data),
 ///       )).toList();
 ///     }
 ///
-///     // Flatten nested maps so keys match {{namespace.field}} tokens.
-///     // e.g. {'customer': {'name': 'John'}} → {'customer.name': 'John'}
-///     Map<String, dynamic> _flatten(Map<String, dynamic> m, [String prefix = '']) {
+///     // Flatten nested Appwrite maps → 'customer.name' token keys.
+///     Map<String, dynamic> _flatten(Map<String, dynamic> m, [String p = '']) {
 ///       final out = <String, dynamic>{};
 ///       for (final e in m.entries) {
-///         final key = prefix.isEmpty ? e.key : '$prefix.${e.key}';
+///         final key = p.isEmpty ? e.key : '$p.${e.key}';
 ///         if (e.value is Map<String, dynamic>) {
 ///           out.addAll(_flatten(e.value as Map<String, dynamic>, key));
 ///         } else {
@@ -112,41 +151,46 @@
 ///     }
 ///   }
 ///
-///   // Register at startup — the left-sidebar record picker will use it:
+///   // Register once, the sidebar picker uses it automatically:
 ///   AdapterRegistry.register(RepairXAdapter(databases));
 ///
 /// ─────────────────────────────────────────────────────────────────────────────
-/// TOKEN SYNTAX (used in text elements on the canvas)
+/// TOKEN SYNTAX  (text elements on the canvas)
 /// ─────────────────────────────────────────────────────────────────────────────
 ///
-///   {{namespace.field}}          — replaced with the flat map value at that key
-///   {{order.number}}             — e.g. "WO-4821"
-///   {{customer.name|uppercase}}  — pipe transforms: uppercase / lowercase / trim
-///   {{order.date|date:dd/MM/yy}} — date formatting
+///   {{order.number}}              →  "WO-4821"
+///   {{customer.name|uppercase}}   →  "JOHN SMITH"
+///   {{order.date|date:dd/MM/yy}}  →  "25/06/26"
+///   {{product.price|trim}}        →  whitespace stripped
 ///
-///   TokenService.resolveTokens(template, record, entityName) does the
-///   substitution — call it yourself for custom rendering.
+///   Call TokenService.resolveTokens(content, record, entity, computed)
+///   yourself for custom rendering outside the editor.
+///
+/// ─────────────────────────────────────────────────────────────────────────────
+/// CONNECTION STATUS INDICATOR  (left sidebar dot)
+/// ─────────────────────────────────────────────────────────────────────────────
+///
+///   Green  = real adapter registered (shows adapter.displayName, e.g. "RepairX")
+///   Amber  = MockDataAdapter active (offline / design mode)
+///   Red    = user explicitly disconnected
 ///
 /// ─────────────────────────────────────────────────────────────────────────────
 /// PAPER SIZES
 /// ─────────────────────────────────────────────────────────────────────────────
 ///
-///   final sizes = PaperSizeService.all;   // List<PaperSize>
-///   final a4   = PaperSizeService.find('A4');
-///   // PaperSize has: id, label, widthMm, heightMm
-///
-/// ─────────────────────────────────────────────────────────────────────────────
-/// CONNECTION STATUS INDICATOR
-/// ─────────────────────────────────────────────────────────────────────────────
-///
-///   The left sidebar shows:
-///     • Green dot  = a real DataSourceAdapter is registered and active
-///     • Amber dot  = MockDataAdapter is active (design / offline mode)
-///     • Red dot    = explicitly disconnected (user pressed Disconnect)
-///
-///   The indicator label shows the adapter's displayName, so "RepairX" will
-///   appear once you register RepairXAdapter.
-///
+///   final sizes = PaperSizeService.all;      // List<PaperSize>
+///   final a4    = PaperSizeService.find('A4');
+///   // PaperSize exposes: id, label, widthMm, heightMm
+
+// ── Widget API ────────────────────────────────────────────────────────────────
+export 'widgets/papercraft_data_source.dart';
+export 'widgets/papercraft_editor.dart';
+export 'widgets/papercraft_renderer.dart';
+export 'widgets/papercraft_print.dart';
+
+// ── Screen API (GoRouter-friendly) ───────────────────────────────────────────
+export 'screens/editor_screen.dart';
+export 'screens/dashboard_screen.dart';
 
 // ── Models ────────────────────────────────────────────────────────────────────
 export 'models/template_model.dart';
@@ -158,15 +202,12 @@ export 'models/layout_helpers.dart';
 export 'services/template_service.dart';
 export 'services/print_service.dart';
 export 'services/data_source_adapter.dart';
+export 'services/papercraft_storage.dart';
 export 'services/token_service.dart';
 export 'services/paper_size_service.dart';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 export 'state/editor_state.dart';
-
-// ── Screens ───────────────────────────────────────────────────────────────────
-export 'screens/editor_screen.dart';
-export 'screens/dashboard_screen.dart';
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
 export 'theme/app_colors.dart';
