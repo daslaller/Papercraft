@@ -66,8 +66,10 @@ class _DevApp extends StatelessWidget {
         GoRoute(path: '/', builder: (_, __) => const DashboardScreen()),
         GoRoute(
           path: '/editor/:id',
-          builder: (_, state) =>
-              EditorScreen(templateId: state.pathParameters['id']!),
+          builder: (ctx, state) => EditorScreen(
+            templateId: state.pathParameters['id']!,
+            onBack: () => ctx.go('/'),
+          ),
         ),
       ],
     );

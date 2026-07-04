@@ -54,8 +54,10 @@ class PapercraftApp extends StatelessWidget {
         ),
         GoRoute(
           path: '/editor/:id',
-          builder: (_, state) =>
-              EditorScreen(templateId: state.pathParameters['id']!),
+          builder: (routerCtx, state) => EditorScreen(
+            templateId: state.pathParameters['id']!,
+            onBack: () => routerCtx.go('/'),
+          ),
         ),
       ],
     );
