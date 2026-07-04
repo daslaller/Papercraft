@@ -14,10 +14,13 @@ import 'editor/toolbar.dart';
 import 'editor/viewport_nav.dart';
 import 'modals/preview_modal.dart';
 import 'modals/print_preview_modal.dart';
+import '../services/papercraft_storage.dart';
+import 'papercraft_controller.dart';
 import 'papercraft_data_source.dart';
 import 'papercraft_renderer.dart';
 
 export 'papercraft_data_source.dart';
+export 'papercraft_controller.dart';
 
 /// Self-contained label/document editor widget.
 ///
@@ -89,6 +92,21 @@ class PapercraftEditor extends StatefulWidget {
   /// flat record that was used to fill tokens.
   final void Function(Template template, Map<String, dynamic> record)? onPrint;
 
+  /// Optional controller for programmatic undo/redo/zoom/save.
+  ///
+  /// ```dart
+  /// final _ctrl = PapercraftController();
+  /// PapercraftEditor(templateId: id, controller: _ctrl)
+  /// // then: _ctrl.undo(), _ctrl.save(), etc.
+  /// ```
+  final PapercraftController? controller;
+
+  /// Custom template storage back-end.
+  ///
+  /// Defaults to [StorageRegistry.active] (SharedPreferences unless you've
+  /// called [StorageRegistry.register]).
+  final PapercraftStorage? storage;
+
   /// Show the right properties panel. Defaults to true.
   /// Set false if you embed the editor alongside your own property UI.
   final bool showPropertiesPanel;
@@ -101,6 +119,8 @@ class PapercraftEditor extends StatefulWidget {
     this.onClose,
     this.onSave,
     this.onPrint,
+    this.controller,
+    this.storage,
     this.showPropertiesPanel = true,
   });
 
@@ -121,8 +141,19 @@ class _PapercraftEditorState extends State<PapercraftEditor> {
     _load();
   }
 
+  PapercraftStorage get _storage => widget.storage ?? StorageRegistry.active;
+
   Future<void> _load() async {
-    await _state.load(widget.templateId);
+    // Use the provided storage to load; fall back to EditorState.load which
+    // uses TemplateService (SharedPrefs) if no custom storage given.
+    if (widget.storage != null) {
+      final template = await _storage.getById(widget.templateId);
+      if (template != null) {
+        _state.loadFromTemplate(template);
+      }
+    } else {
+      await _state.load(widget.templateId);
+    }
     if (!mounted) return;
 
     if (_state.template == null) {
@@ -137,6 +168,9 @@ class _PapercraftEditorState extends State<PapercraftEditor> {
       _state.setPreviewRecord(ds.fields, ds.entityName);
       _state.setPreviewMode(true);
     }
+
+    // Attach controller if provided.
+    widget.controller?.attach(_state);
 
     setState(() => _loading = false);
 
@@ -162,6 +196,7 @@ class _PapercraftEditorState extends State<PapercraftEditor> {
 
   @override
   void dispose() {
+    widget.controller?.detach();
     _state.dispose();
     super.dispose();
   }

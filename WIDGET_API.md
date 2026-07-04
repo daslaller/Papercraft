@@ -309,8 +309,4 @@ final a4    = PaperSizeService.find('A4');
 
 ## Roadmap
 
-- [ ] Multi-record batch print (one page per record from a list)
-- [ ] Label sheet layout (N-up, e.g. 30 labels per A4 page)
-- [ ] `PapercraftStorage` interface for cloud/DB template storage
-- [ ] `PapercraftController` for programmatic undo/redo/zoom/save
-- [ ] Barcode auto-detection from field value type
+All planned items are implemented. Nothing is pending.
