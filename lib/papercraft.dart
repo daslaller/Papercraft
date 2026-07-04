@@ -183,6 +183,7 @@
 ///   // PaperSize exposes: id, label, widthMm, heightMm
 
 // ── Widget API ────────────────────────────────────────────────────────────────
+export 'widgets/papercraft_data_source.dart';
 export 'widgets/papercraft_editor.dart';
 export 'widgets/papercraft_renderer.dart';
 export 'widgets/papercraft_print.dart';
