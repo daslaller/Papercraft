@@ -128,7 +128,7 @@ class _PapercraftEditorState extends State<PapercraftEditor> {
         child: Column(
           children: [
             EditorToolbar(
-              onBack: widget.onClose,
+              onBack: widget.onClose ?? () {},
               onPreview: _openPreview,
               onExportPdf: _openPrintPreview,
             ),

@@ -184,6 +184,8 @@
 
 // ── Widget API ────────────────────────────────────────────────────────────────
 export 'widgets/papercraft_editor.dart';
+export 'widgets/papercraft_renderer.dart';
+export 'widgets/papercraft_print.dart';
 
 // ── Screen API (GoRouter-friendly) ───────────────────────────────────────────
 export 'screens/editor_screen.dart';
