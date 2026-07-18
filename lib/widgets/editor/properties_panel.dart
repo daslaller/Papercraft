@@ -582,19 +582,34 @@ class PropertiesPanel extends StatelessWidget {
         const SizedBox(height: 4),
         _ColorInput(value: el.stroke, onChanged: (v) => update(el.copyWith(stroke: v))),
         const SizedBox(height: 8),
-        Row(children: [
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const _Label('Stroke W'),
-            _NumInput(value: el.strokeWidth, min: 0, max: 20,
-                onChanged: (v) => update(el.copyWith(strokeWidth: v))),
-          ])),
-          const SizedBox(width: 8),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const _Label('Radius'),
-            _NumInput(value: el.borderRadius, min: 0, max: 200,
-                onChanged: (v) => update(el.copyWith(borderRadius: v))),
-          ])),
-        ]),
+        const _Label('Stroke W'),
+        const SizedBox(height: 4),
+        _NumInput(value: el.strokeWidth, min: 0, max: 20,
+            onChanged: (v) => update(el.copyWith(strokeWidth: v))),
+        const SizedBox(height: 12),
+        _CornerRadiusEditor(
+          corners: el.corners,
+          onUniform: (v) => update(el.copyWith(
+            borderRadius: v,
+            clearCornerRadii: true,
+          )),
+          onUnlink: () {
+            final u = el.corners.asUnlinked();
+            update(el.copyWith(
+              borderRadius: u.borderRadius,
+              borderRadiusTL: u.borderRadiusTL,
+              borderRadiusTR: u.borderRadiusTR,
+              borderRadiusBR: u.borderRadiusBR,
+              borderRadiusBL: u.borderRadiusBL,
+            ));
+          },
+          onCorner: (tl, tr, br, bl) => update(el.copyWith(
+            borderRadiusTL: tl,
+            borderRadiusTR: tr,
+            borderRadiusBR: br,
+            borderRadiusBL: bl,
+          )),
+        ),
         const SizedBox(height: 12),
         GradientEditor(
           gradient: el.gradient,
@@ -644,10 +659,29 @@ class PropertiesPanel extends StatelessWidget {
           onChanged: (v) { if (v != null) update(el.copyWith(objectFit: v)); },
         ),
         const SizedBox(height: 8),
-        const _Label('Radius'),
-        const SizedBox(height: 4),
-        _NumInput(value: el.borderRadius, min: 0, max: 200,
-            onChanged: (v) => update(el.copyWith(borderRadius: v))),
+        _CornerRadiusEditor(
+          corners: el.corners,
+          onUniform: (v) => update(el.copyWith(
+            borderRadius: v,
+            clearCornerRadii: true,
+          )),
+          onUnlink: () {
+            final u = el.corners.asUnlinked();
+            update(el.copyWith(
+              borderRadius: u.borderRadius,
+              borderRadiusTL: u.borderRadiusTL,
+              borderRadiusTR: u.borderRadiusTR,
+              borderRadiusBR: u.borderRadiusBR,
+              borderRadiusBL: u.borderRadiusBL,
+            ));
+          },
+          onCorner: (tl, tr, br, bl) => update(el.copyWith(
+            borderRadiusTL: tl,
+            borderRadiusTR: tr,
+            borderRadiusBR: br,
+            borderRadiusBL: bl,
+          )),
+        ),
       ]),
     );
   }
@@ -887,10 +921,29 @@ class PropertiesPanel extends StatelessWidget {
           onChanged: (v) => update(el.copyWith(background: v)),
         ),
         const SizedBox(height: 8),
-        const _Label('Radius'),
-        const SizedBox(height: 4),
-        _NumInput(value: el.borderRadius, min: 0, max: 200,
-            onChanged: (v) => update(el.copyWith(borderRadius: v))),
+        _CornerRadiusEditor(
+          corners: el.corners,
+          onUniform: (v) => update(el.copyWith(
+            borderRadius: v,
+            clearCornerRadii: true,
+          )),
+          onUnlink: () {
+            final u = el.corners.asUnlinked();
+            update(el.copyWith(
+              borderRadius: u.borderRadius,
+              borderRadiusTL: u.borderRadiusTL,
+              borderRadiusTR: u.borderRadiusTR,
+              borderRadiusBR: u.borderRadiusBR,
+              borderRadiusBL: u.borderRadiusBL,
+            ));
+          },
+          onCorner: (tl, tr, br, bl) => update(el.copyWith(
+            borderRadiusTL: tl,
+            borderRadiusTR: tr,
+            borderRadiusBR: br,
+            borderRadiusBL: bl,
+          )),
+        ),
       ]),
     );
   }
@@ -1153,9 +1206,7 @@ class _ModeBtn extends StatelessWidget {
           decoration: BoxDecoration(
             color: active ? AppColors.card : Colors.transparent,
             borderRadius: BorderRadius.circular(6),
-            boxShadow: active
-                ? [const BoxShadow(color: Color(0x18000000), blurRadius: 4, offset: Offset(0, 1))]
-                : null,
+            boxShadow: active ? AppColors.shadowSm : null,
           ),
           child: Text(
             label,
@@ -1168,6 +1219,135 @@ class _ModeBtn extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Uniform or per-corner border radius editor for shape / image / row / col.
+class _CornerRadiusEditor extends StatelessWidget {
+  final CornerRadii corners;
+  final void Function(double uniform) onUniform;
+  final VoidCallback onUnlink;
+  final void Function(double tl, double tr, double br, double bl) onCorner;
+
+  const _CornerRadiusEditor({
+    required this.corners,
+    required this.onUniform,
+    required this.onUnlink,
+    required this.onCorner,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final uniform = corners.isUniform;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          const Expanded(child: _Label('Corner radius')),
+          GestureDetector(
+            onTap: () {
+              if (uniform) {
+                onUnlink();
+              } else {
+                onUniform(corners.borderRadius);
+              }
+            },
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(
+                uniform ? Icons.link : Icons.link_off,
+                size: 14,
+                color: uniform ? AppColors.accent : AppColors.mutedForeground,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                uniform ? 'Uniform' : 'Per corner',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: uniform ? AppColors.accent : AppColors.mutedForeground,
+                ),
+              ),
+            ]),
+          ),
+        ]),
+        const SizedBox(height: 4),
+        if (uniform)
+          _NumInput(
+            value: corners.borderRadius,
+            min: 0,
+            max: 200,
+            onChanged: onUniform,
+          )
+        else ...[
+          Row(children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _Label('TL'),
+                  _NumInput(
+                    value: corners.topLeft,
+                    min: 0,
+                    max: 200,
+                    onChanged: (v) => onCorner(
+                      v, corners.topRight, corners.bottomRight, corners.bottomLeft),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _Label('TR'),
+                  _NumInput(
+                    value: corners.topRight,
+                    min: 0,
+                    max: 200,
+                    onChanged: (v) => onCorner(
+                      corners.topLeft, v, corners.bottomRight, corners.bottomLeft),
+                  ),
+                ],
+              ),
+            ),
+          ]),
+          const SizedBox(height: 6),
+          Row(children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _Label('BL'),
+                  _NumInput(
+                    value: corners.bottomLeft,
+                    min: 0,
+                    max: 200,
+                    onChanged: (v) => onCorner(
+                      corners.topLeft, corners.topRight, corners.bottomRight, v),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _Label('BR'),
+                  _NumInput(
+                    value: corners.bottomRight,
+                    min: 0,
+                    max: 200,
+                    onChanged: (v) => onCorner(
+                      corners.topLeft, corners.topRight, v, corners.bottomLeft),
+                  ),
+                ],
+              ),
+            ),
+          ]),
+        ],
+      ],
     );
   }
 }

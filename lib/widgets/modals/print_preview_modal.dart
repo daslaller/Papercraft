@@ -3,6 +3,7 @@ import 'package:printing/printing.dart';
 import '../../models/element_model.dart';
 import '../../models/template_model.dart';
 import '../../services/print_service.dart';
+import '../../services/printer_provider.dart';
 import '../../services/token_service.dart';
 import '../../theme/app_colors.dart';
 
@@ -12,7 +13,8 @@ class PrintPreviewModal extends StatefulWidget {
   final Map<String, dynamic>? record;
   final String? entityName;
   final List<ComputedField> computedFields;
-  final void Function(String?)? onPrinterSelected;
+  final void Function(PapercraftPrinter?)? onPrinterSelected;
+  final void Function(Template template)? onPrinted;
 
   const PrintPreviewModal({
     super.key,
@@ -22,6 +24,7 @@ class PrintPreviewModal extends StatefulWidget {
     this.entityName,
     this.computedFields = const [],
     this.onPrinterSelected,
+    this.onPrinted,
   });
 
   @override
@@ -29,8 +32,8 @@ class PrintPreviewModal extends StatefulWidget {
 }
 
 class _PrintPreviewModalState extends State<PrintPreviewModal> {
-  List<Printer> _printers = [];
-  Printer? _selectedPrinter;
+  List<PapercraftPrinter> _printers = [];
+  PapercraftPrinter? _selectedPrinter;
   bool _loadingPrinters = true;
 
   @override
@@ -41,17 +44,15 @@ class _PrintPreviewModalState extends State<PrintPreviewModal> {
 
   Future<void> _loadPrinters() async {
     try {
-      final printers = await Printing.listPrinters();
+      final printers = await PrinterRegistry.active.listPrinters();
       if (mounted) {
         setState(() {
           _printers = printers;
           _loadingPrinters = false;
-          // Match by name
-          if (widget.template.printerName != null) {
-            _selectedPrinter = printers
-                .where((p) => p.name == widget.template.printerName)
-                .firstOrNull;
-          }
+          _selectedPrinter = PrinterProvider.resolveFromList(
+            widget.template,
+            printers,
+          );
         });
       }
     } catch (_) {
@@ -62,11 +63,12 @@ class _PrintPreviewModalState extends State<PrintPreviewModal> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
+      backgroundColor: AppColors.card,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       insetPadding: const EdgeInsets.all(24),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 860, maxHeight: 800),
         child: Column(children: [
-          // Header
           Container(
             padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
             decoration: const BoxDecoration(
@@ -78,32 +80,38 @@ class _PrintPreviewModalState extends State<PrintPreviewModal> {
               Expanded(
                 child: Text(
                   'Print — ${widget.template.name}',
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.foreground,
+                  ),
                 ),
               ),
-              // Printer selector
               if (!_loadingPrinters && _printers.isNotEmpty) ...[
                 const Text('Printer: ',
                     style: TextStyle(fontSize: 12, color: AppColors.mutedForeground)),
-                DropdownButton<Printer?>(
+                DropdownButton<PapercraftPrinter?>(
                   value: _selectedPrinter,
                   hint: const Text('Default', style: TextStyle(fontSize: 12)),
                   isDense: true,
                   underline: const SizedBox(),
                   style: const TextStyle(fontSize: 12, color: AppColors.foreground),
                   items: [
-                    const DropdownMenuItem<Printer?>(
+                    const DropdownMenuItem<PapercraftPrinter?>(
                       value: null,
                       child: Text('Default printer'),
                     ),
-                    ..._printers.map((p) => DropdownMenuItem<Printer?>(
+                    ..._printers.map((p) => DropdownMenuItem<PapercraftPrinter?>(
                           value: p,
-                          child: Text(p.name, overflow: TextOverflow.ellipsis),
+                          child: Text(
+                            p.isLocal ? p.name : '${p.name} (external)',
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         )),
                   ],
                   onChanged: (p) {
                     setState(() => _selectedPrinter = p);
-                    widget.onPrinterSelected?.call(p?.name);
+                    widget.onPrinterSelected?.call(p);
                   },
                 ),
                 const SizedBox(width: 8),
@@ -115,8 +123,6 @@ class _PrintPreviewModalState extends State<PrintPreviewModal> {
               ),
             ]),
           ),
-
-          // PDF Preview
           Expanded(
             child: PdfPreview(
               build: (_) => PrintService.buildPdf(
@@ -146,10 +152,10 @@ class _PrintPreviewModalState extends State<PrintPreviewModal> {
                   onPressed: (ctx, build, pageFormat) async {
                     final bytes = await build(pageFormat);
                     if (_selectedPrinter != null) {
-                      await Printing.directPrintPdf(
-                        printer: _selectedPrinter!,
-                        onLayout: (_) async => bytes,
-                        name: widget.template.name,
+                      await PrinterRegistry.active.printPdf(
+                        _selectedPrinter!,
+                        bytes,
+                        jobName: widget.template.name,
                       );
                     } else {
                       await Printing.layoutPdf(
@@ -157,6 +163,7 @@ class _PrintPreviewModalState extends State<PrintPreviewModal> {
                         onLayout: (_) async => bytes,
                       );
                     }
+                    widget.onPrinted?.call(widget.template);
                   },
                 ),
               ],

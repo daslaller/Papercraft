@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/painting.dart' show Offset;
+import 'package:flutter/painting.dart' show Offset, Size;
 import '../models/element_model.dart';
 import '../models/layout_helpers.dart';
 import '../models/template_model.dart';
-import '../services/template_service.dart';
+import '../services/papercraft_storage.dart';
 
 const _maxHistory = 30;
 const kZoomSteps = [10, 25, 33, 50, 67, 75, 100, 125, 150, 200];
@@ -16,6 +16,14 @@ class SnapGuide {
 }
 
 class EditorState extends ChangeNotifier {
+  EditorState({PapercraftStorage? storage})
+      : _storage = storage ?? StorageRegistry.active;
+
+  PapercraftStorage _storage;
+
+  /// Optional callback fired after every successful persist.
+  void Function(Template template)? onSaved;
+
   Template? _template;
   List<CanvasElement> _elements = [];
   String? _selectedId;
@@ -29,6 +37,8 @@ class EditorState extends ChangeNotifier {
   // View
   double _zoom = 100;
   Offset _panOffset = Offset.zero;
+  Size? _viewportSize;
+  Offset? _viewportGlobalOrigin;
   bool _panMode = true;
   bool _elementDragActive = false; // set by CanvasElementWidget BEFORE workspace checks
   bool _gridEnabled = false;
@@ -45,12 +55,20 @@ class EditorState extends ChangeNotifier {
   bool _saving = false;
   Timer? _autoSaveTimer;
 
+  /// Minimum fraction of the canvas that must remain visible when panning.
+  static const double _minVisibleFraction = 0.15;
+  static const double _edgeAutoPanZone = 48;
+  static const double _edgeAutoPanStep = 12;
+
+  PapercraftStorage get storage => _storage;
+
   Template? get template => _template;
   List<CanvasElement> get elements => _elements;
   String? get selectedId => _selectedId;
   String? get selectedChildId => _selectedChildId;
   double get zoom => _zoom;
   Offset get panOffset => _panOffset;
+  Size? get viewportSize => _viewportSize;
   bool get panMode => _panMode;
   bool get elementDragActive => _elementDragActive;
   bool get gridEnabled => _gridEnabled;
@@ -85,14 +103,18 @@ class EditorState extends ChangeNotifier {
     return el != null && (el.type == 'row' || el.type == 'col');
   }
 
+  /// Swap the storage backend (e.g. when [PapercraftEditor.storage] is set).
+  void setStorage(PapercraftStorage storage) {
+    _storage = storage;
+  }
+
   Future<void> load(String templateId) async {
-    final t = await TemplateService.getById(templateId);
+    final t = await _storage.getById(templateId);
     if (t == null) return;
     loadFromTemplate(t);
   }
 
-  /// Load directly from a [Template] object — used by [PapercraftEditor] when
-  /// a custom [PapercraftStorage] is provided.
+  /// Load directly from a [Template] object.
   void loadFromTemplate(Template t) {
     _template = t;
     _elements = elementsFromJson(t.elements);
@@ -109,12 +131,14 @@ class EditorState extends ChangeNotifier {
 
   void setZoom(double z) {
     _zoom = z.clamp(10, 400);
+    _panOffset = clampPanOffset(_panOffset);
     notifyListeners();
   }
 
   void zoomIn() {
     final next = kZoomSteps.where((s) => s > _zoom).firstOrNull;
     _zoom = (next ?? 400).toDouble();
+    _panOffset = clampPanOffset(_panOffset);
     notifyListeners();
   }
 
@@ -122,6 +146,7 @@ class EditorState extends ChangeNotifier {
     final prev =
         kZoomSteps.reversed.where((s) => s < _zoom).firstOrNull;
     _zoom = (prev ?? 10).toDouble();
+    _panOffset = clampPanOffset(_panOffset);
     notifyListeners();
   }
 
@@ -136,19 +161,84 @@ class EditorState extends ChangeNotifier {
     // Canvas renders at (48 + panOffset.dx, 48 + panOffset.dy) because OverflowBox
     // places Center at (0,0) with infinite constraints (Center shrinks to child size).
     // So to center the canvas: 48 + panX = (viewW - cw*scale) / 2
-    _panOffset = Offset(
+    _viewportSize ??= Size(viewW, viewH);
+    _panOffset = clampPanOffset(Offset(
       (viewW - cw * scale) / 2 - 48,
       (viewH - ch * scale) / 2 - 48,
-    );
+    ));
     notifyListeners();
   }
 
   void startElementDrag() => _elementDragActive = true;
   void endElementDrag() => _elementDragActive = false;
 
-  void setPanOffset(Offset o) {
-    _panOffset = o;
+  void setViewportGeometry(Size size, Offset globalOrigin) {
+    final sizeChanged = _viewportSize != size;
+    final originChanged = _viewportGlobalOrigin != globalOrigin;
+    if (!sizeChanged && !originChanged) return;
+    _viewportSize = size;
+    _viewportGlobalOrigin = globalOrigin;
+    _panOffset = clampPanOffset(_panOffset);
     notifyListeners();
+  }
+
+  void setPanOffset(Offset o) {
+    _panOffset = clampPanOffset(o);
+    notifyListeners();
+  }
+
+  /// Clamp [offset] so a minimum portion of the canvas stays in the viewport.
+  Offset clampPanOffset(Offset offset) {
+    final view = _viewportSize;
+    final t = _template;
+    if (view == null || t == null) return offset;
+
+    final scale = _zoom / 100;
+    final cw = mmToPx(t.canvasWidthMm) * scale;
+    final ch = mmToPx(t.canvasHeightMm) * scale;
+    final minVisibleW = cw * _minVisibleFraction;
+    final minVisibleH = ch * _minVisibleFraction;
+
+    // Canvas is drawn at (48 + pan.dx, 48 + pan.dy) in workspace coords.
+    const pad = 48.0;
+    final minX = minVisibleW - cw - pad;
+    final maxX = view.width - minVisibleW - pad;
+    final minY = minVisibleH - ch - pad;
+    final maxY = view.height - minVisibleH - pad;
+
+    return Offset(
+      offset.dx.clamp(minX < maxX ? minX : maxX, minX < maxX ? maxX : minX),
+      offset.dy.clamp(minY < maxY ? minY : maxY, minY < maxY ? maxY : minY),
+    );
+  }
+
+  /// Auto-pan the viewport when an element drag pointer is near an edge.
+  /// [localPosition] is in workspace/viewport coordinates.
+  void autoPanForPointer(Offset localPosition) {
+    final view = _viewportSize;
+    if (view == null) return;
+
+    var dx = 0.0;
+    var dy = 0.0;
+    if (localPosition.dx < _edgeAutoPanZone) {
+      dx = _edgeAutoPanStep;
+    } else if (localPosition.dx > view.width - _edgeAutoPanZone) {
+      dx = -_edgeAutoPanStep;
+    }
+    if (localPosition.dy < _edgeAutoPanZone) {
+      dy = _edgeAutoPanStep;
+    } else if (localPosition.dy > view.height - _edgeAutoPanZone) {
+      dy = -_edgeAutoPanStep;
+    }
+    if (dx == 0 && dy == 0) return;
+    setPanOffset(_panOffset + Offset(dx, dy));
+  }
+
+  /// Same as [autoPanForPointer] but accepts a global screen position.
+  void autoPanForGlobalPointer(Offset globalPosition) {
+    final origin = _viewportGlobalOrigin;
+    if (origin == null) return;
+    autoPanForPointer(globalPosition - origin);
   }
 
   void setPanMode(bool v) {
@@ -552,12 +642,13 @@ class EditorState extends ChangeNotifier {
     if (_template == null) return;
     _saving = true;
     notifyListeners();
-    final updated = await TemplateService.update(
+    final updated = await _storage.save(
       _template!.copyWith(elements: elementsToJson(_elements)),
     );
     _template = updated;
     _saving = false;
     notifyListeners();
+    onSaved?.call(updated);
   }
 
   // ── Snap ─────────────────────────────────────────────────────────────────────

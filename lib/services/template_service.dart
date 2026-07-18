@@ -33,6 +33,7 @@ class TemplateService {
     required double heightMm,
     required String ownerId,
     String? printerName,
+    String? printerId,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final json = prefs.getString(_key) ?? '[]';
@@ -47,6 +48,7 @@ class TemplateService {
       canvasWidthMm: widthMm,
       canvasHeightMm: heightMm,
       printerName: printerName,
+      printerId: printerId,
       ownerId: ownerId,
       createdDate: now,
       updatedDate: now,
@@ -87,7 +89,7 @@ class TemplateService {
 
     final now = DateTime.now();
     final elements = '''[
-      {"id":"seed_1","type":"shape","x":0,"y":0,"width":383,"height":4,"rotation":0,"opacity":1,"zIndex":1,"shape":"rectangle","fill":"#6366f1","stroke":"#6366f1","strokeWidth":0,"borderRadius":0},
+      {"id":"seed_1","type":"shape","x":0,"y":0,"width":383,"height":4,"rotation":0,"opacity":1,"zIndex":1,"shape":"rectangle","fill":"#0A66D6","stroke":"#0A66D6","strokeWidth":0,"borderRadius":0},
       {"id":"seed_2","type":"text","x":20,"y":16,"width":340,"height":36,"rotation":0,"opacity":1,"zIndex":2,"content":"SHIPPING LABEL","fontSize":22,"fontFamily":"Inter","fontWeight":"bold","fontStyle":"normal","textAlign":"left","color":"#1A1A1A","lineHeight":1.2},
       {"id":"seed_3","type":"text","x":20,"y":60,"width":160,"height":16,"rotation":0,"opacity":1,"zIndex":3,"content":"FROM","fontSize":9,"fontFamily":"Inter","fontWeight":"600","fontStyle":"normal","textAlign":"left","color":"#9E9890","lineHeight":1.2},
       {"id":"seed_4","type":"text","x":20,"y":76,"width":340,"height":60,"rotation":0,"opacity":1,"zIndex":4,"content":"Sender Name\\n123 Main St, City, ST 12345","fontSize":13,"fontFamily":"Inter","fontWeight":"normal","fontStyle":"normal","textAlign":"left","color":"#1A1A1A","lineHeight":1.5},
@@ -135,6 +137,8 @@ class TemplateService {
       backgroundColor: template.backgroundColor,
       elements: template.elements,
       connectedEntity: template.connectedEntity,
+      printerName: template.printerName,
+      printerId: template.printerId,
       sectionLayoutEnabled: template.sectionLayoutEnabled,
       ownerId: ownerId,
       createdDate: now,

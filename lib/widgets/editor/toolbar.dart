@@ -29,8 +29,8 @@ class EditorToolbar extends StatelessWidget {
           filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
           child: Container(
             decoration: const BoxDecoration(
-              color: Color(0xEEFFFFFF), // ~93% white
-              border: Border(bottom: BorderSide(color: Color(0x0F000000))),
+              color: AppColors.glassBar,
+              border: Border(bottom: BorderSide(color: AppColors.hairlineSoft)),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Row(children: [
@@ -217,7 +217,7 @@ class _ToolDivider extends StatelessWidget {
     return const SizedBox(
       width: 1,
       height: 16,
-      child: VerticalDivider(color: Color(0x1A000000)),
+      child: VerticalDivider(color: AppColors.hairline),
     );
   }
 }
@@ -260,7 +260,7 @@ class _InsertButtonState extends State<_InsertButton> {
             decoration: BoxDecoration(
               color: active
                   ? withAlpha(AppColors.accent, 0.12)
-                  : (_hovered ? const Color(0x14000000) : Colors.transparent),
+                  : (_hovered ? AppColors.hairlineSoft : Colors.transparent),
               borderRadius: BorderRadius.circular(7),
             ),
             child: Icon(
@@ -342,7 +342,7 @@ class _Divider extends StatelessWidget {
     return const SizedBox(
       width: 1,
       height: 16,
-      child: VerticalDivider(color: Color(0x1A000000)),
+      child: VerticalDivider(color: AppColors.hairline),
     );
   }
 }
@@ -376,9 +376,9 @@ class _PreviewToggleState extends State<_PreviewToggle> {
             decoration: BoxDecoration(
               color: active
                   ? AppColors.accent
-                  : (_hovered ? const Color(0x12000000) : Colors.transparent),
+                  : (_hovered ? AppColors.hairlineSoft : Colors.transparent),
               borderRadius: BorderRadius.circular(8),
-              border: active ? null : Border.all(color: const Color(0x1A000000)),
+              border: active ? null : Border.all(color: const AppColors.hairline),
             ),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               Icon(
@@ -439,9 +439,9 @@ class _OutlineButtonState extends State<_OutlineButton> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
-              color: _hovered ? const Color(0x12000000) : Colors.transparent,
+              color: _hovered ? AppColors.hairlineSoft : Colors.transparent,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0x1A000000)),
+              border: Border.all(color: const AppColors.hairline),
             ),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               Icon(widget.icon,

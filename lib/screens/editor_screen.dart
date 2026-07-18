@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../models/element_model.dart';
-import '../services/template_service.dart';
+import '../services/papercraft_storage.dart';
+import '../services/printer_provider.dart';
 import '../state/editor_state.dart';
 import '../theme/app_colors.dart';
 import '../widgets/editor/canvas_workspace.dart';
@@ -165,10 +165,14 @@ class _EditorScreenState extends State<EditorScreen> {
       builder: (_) => PrintPreviewModal(
         template: template,
         elements: elements,
-        onPrinterSelected: (printerName) async {
-          final updated = template.copyWith(printerName: printerName, clearPrinter: printerName == null);
-          await TemplateService.update(updated);
-          _state.updateTemplate(updated);
+        onPrinterSelected: (PapercraftPrinter? printer) async {
+          final updated = template.copyWith(
+            printerName: printer?.name,
+            printerId: printer?.id,
+            clearPrinter: printer == null,
+          );
+          final saved = await StorageRegistry.active.save(updated);
+          _state.updateTemplate(saved);
         },
       ),
     );

@@ -4,7 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../models/template_model.dart';
 import '../services/auth_service.dart';
-import '../services/template_service.dart';
+import '../services/papercraft_storage.dart';
 import '../theme/app_colors.dart';
 import '../widgets/modals/new_template_modal.dart';
 
@@ -39,8 +39,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _load() async {
     final user = context.read<AuthService>().user;
     if (user == null) return;
-    await TemplateService.seedDefaults(user.id);
-    final templates = await TemplateService.list(user.id);
+    final storage = StorageRegistry.active;
+    await storage.seedDefaults(user.id);
+    final templates = await storage.list(ownerId: user.id);
     if (!mounted) return;
     setState(() { _templates = templates; _loading = false; });
   }
@@ -101,7 +102,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Container(
       height: 64,
       decoration: BoxDecoration(
-        color: const Color(0xFAFFFFFF),
+        color: AppColors.glassBar,
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -290,19 +291,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
           template: items[i],
           onOpen: () => context.go('/editor/${items[i].id}'),
           onDelete: () async {
-            await TemplateService.delete(items[i].id);
+            await StorageRegistry.active.delete(items[i].id);
             _load();
           },
           onDuplicate: () async {
             final user = context.read<AuthService>().user;
             if (user == null) return;
             final copy =
-                await TemplateService.duplicate(items[i], user.id);
+                await StorageRegistry.active.duplicate(items[i], user.id);
             if (!mounted) return;
             context.go('/editor/${copy.id}');
           },
           onRename: (name) async {
-            await TemplateService.update(items[i].copyWith(name: name));
+            await StorageRegistry.active.save(items[i].copyWith(name: name));
             _load();
           },
         );

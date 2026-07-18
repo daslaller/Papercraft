@@ -35,52 +35,64 @@ class _CanvasWorkspaceState extends State<CanvasWorkspace> {
     return Focus(
       autofocus: true,
       onKeyEvent: (_, e) => _handleKey(e, state),
-      child: Listener(
-        onPointerDown: (e) => _onPointerDown(e, state),
-        onPointerMove: (e) => _onPointerMove(e, state),
-        onPointerUp: (e) => _onPointerUp(e, state),
-        onPointerSignal: (e) => _onScroll(e, state),
-        child: GestureDetector(
-          onTap: () => state.deselect(),
-          child: Container(
-            key: _workspaceKey,
-            color: AppColors.workspaceBg,
-            child: CustomPaint(
-              painter: _DotGridPainter(),
-              child: Stack(children: [
-                // Canvas container — ClipRect + OverflowBox prevents layout
-                // breakage at any zoom level while still allowing pan overflow.
-                Positioned.fill(
-                  child: ClipRect(
-                    child: OverflowBox(
-                      minWidth: 0,
-                      minHeight: 0,
-                      maxWidth: double.infinity,
-                      maxHeight: double.infinity,
-                      child: Transform.translate(
-                        offset: state.panOffset,
-                        child: Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(48),
-                            child: SizedBox(
-                              width: canvasW * scale,
-                              height: canvasH * scale,
-                              child: Transform.scale(
-                                scale: scale,
-                                alignment: Alignment.topLeft,
-                                child: _buildCanvas(state, template, canvasW, canvasH),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final viewSize = Size(constraints.maxWidth, constraints.maxHeight);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            final box = _workspaceKey.currentContext?.findRenderObject() as RenderBox?;
+            final origin = box?.localToGlobal(Offset.zero) ?? Offset.zero;
+            state.setViewportGeometry(viewSize, origin);
+          });
+          return Listener(
+            onPointerDown: (e) => _onPointerDown(e, state),
+            onPointerMove: (e) => _onPointerMove(e, state),
+            onPointerUp: (e) => _onPointerUp(e, state),
+            onPointerSignal: (e) => _onScroll(e, state),
+            child: GestureDetector(
+              onTap: () => state.deselect(),
+              child: Container(
+                key: _workspaceKey,
+                color: AppColors.workspaceBg,
+                child: CustomPaint(
+                  painter: _DotGridPainter(),
+                  child: Stack(children: [
+                    // Canvas container — ClipRect + OverflowBox prevents layout
+                    // breakage at any zoom level while still allowing pan overflow.
+                    Positioned.fill(
+                      child: ClipRect(
+                        child: OverflowBox(
+                          minWidth: 0,
+                          minHeight: 0,
+                          maxWidth: double.infinity,
+                          maxHeight: double.infinity,
+                          child: Transform.translate(
+                            offset: state.panOffset,
+                            child: Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(48),
+                                child: SizedBox(
+                                  width: canvasW * scale,
+                                  height: canvasH * scale,
+                                  child: Transform.scale(
+                                    scale: scale,
+                                    alignment: Alignment.topLeft,
+                                    child: _buildCanvas(
+                                        state, template, canvasW, canvasH),
+                                  ),
+                                ),
                               ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ),
+                  ]),
                 ),
-              ]),
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -92,7 +104,7 @@ class _CanvasWorkspaceState extends State<CanvasWorkspace> {
     try {
       bgColor = Color(int.parse('FF${bg.replaceAll('#', '')}', radix: 16));
     } catch (_) {
-      bgColor = Colors.white;
+      bgColor = AppColors.card;
     }
 
     // Sort elements by zIndex
@@ -175,10 +187,9 @@ class _CanvasWorkspaceState extends State<CanvasWorkspace> {
             child: Text(
               '${template.canvasSize} · ${template.canvasWidthMm.toStringAsFixed(0)}×${template.canvasHeightMm.toStringAsFixed(0)} mm',
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 11,
-                  color: Color(0x59000000),
-                  fontFamily: 'sans-serif'),
+                  color: withAlpha(AppColors.foreground, 0.35)),
             ),
           ),
         ],
@@ -197,7 +208,7 @@ class _CanvasWorkspaceState extends State<CanvasWorkspace> {
           border: Border.all(
             color: selected
                 ? withAlpha(AppColors.foreground, 0.7)
-                : const Color(0x1A000000),
+                : withAlpha(AppColors.foreground, 0.1),
             width: selected ? 1.5 : 1,
             style: selected ? BorderStyle.solid : BorderStyle.none,
           ),
@@ -222,14 +233,14 @@ class _CanvasWorkspaceState extends State<CanvasWorkspace> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                   decoration: BoxDecoration(
-                    color: const Color(0xB3FFFFFF),
+                    color: withAlpha(AppColors.card, 0.7),
                     borderRadius: BorderRadius.circular(3),
                   ),
                   child: Text(
                     e.type == 'row' ? 'ROW' : 'COL',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 9,
-                      color: Color(0x40000000),
+                      color: withAlpha(AppColors.foreground, 0.25),
                       height: 1.4,
                     ),
                   ),

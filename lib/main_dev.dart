@@ -12,7 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/editor_screen.dart';
 import 'services/auth_service.dart';
-import 'services/template_service.dart';
+import 'services/papercraft_storage.dart';
 import 'theme/app_theme.dart';
 
 const _kDevUserId = 'dev-user-local';
@@ -42,7 +42,7 @@ Future<void> main() async {
   }));
 
   // Seed placeholder templates if none exist yet
-  await TemplateService.seedDefaults(_kDevUserId);
+  await StorageRegistry.active.seedDefaults(_kDevUserId);
 
   final auth = AuthService();
   await auth.init();
