@@ -19,6 +19,18 @@ PdfColor _hex(String hex) {
   }
 }
 
+pw.BorderRadius _pdfCorners(CornerRadii c) {
+  if (c.isUniform) {
+    return pw.BorderRadius.circular(_pxToPt(c.borderRadius));
+  }
+  return pw.BorderRadius.only(
+    topLeft: pw.Radius.circular(_pxToPt(c.topLeft)),
+    topRight: pw.Radius.circular(_pxToPt(c.topRight)),
+    bottomRight: pw.Radius.circular(_pxToPt(c.bottomRight)),
+    bottomLeft: pw.Radius.circular(_pxToPt(c.bottomLeft)),
+  );
+}
+
 class PrintService {
   // ── Fonts ──────────────────────────────────────────────────────────────────
 
@@ -385,7 +397,7 @@ class PrintService {
         border: pw.Border.all(color: _hex(e.stroke), width: _pxToPt(e.strokeWidth)),
         borderRadius: isCircle
             ? pw.BorderRadius.circular(10000)
-            : pw.BorderRadius.circular(_pxToPt(e.borderRadius)),
+            : _pdfCorners(e.corners),
       );
     }
 
@@ -399,11 +411,17 @@ class PrintService {
     final w = _pxToPt(e.width ?? 150);
     final h = _pxToPt(e.height ?? 100);
     if (e.src.isNotEmpty && imageCache.containsKey(e.src)) {
+      // ClipRRect is uniform-only; approximate with average when per-corner.
+      final avgR = (e.corners.topLeft +
+              e.corners.topRight +
+              e.corners.bottomRight +
+              e.corners.bottomLeft) /
+          4;
       return pw.Opacity(
         opacity: e.opacity,
         child: pw.ClipRRect(
-          horizontalRadius: _pxToPt(e.borderRadius),
-          verticalRadius: _pxToPt(e.borderRadius),
+          horizontalRadius: _pxToPt(avgR),
+          verticalRadius: _pxToPt(avgR),
           child: pw.Image(imageCache[e.src]!, width: w, height: h,
               fit: _pdfFit(e.objectFit)),
         ),
@@ -557,7 +575,7 @@ class PrintService {
         decoration: pw.BoxDecoration(
           color: e.gradient == null ? bgColor : null,
           gradient: e.gradient != null ? _pdfGradient(e.gradient!) : null,
-          borderRadius: pw.BorderRadius.circular(_pxToPt(e.borderRadius)),
+          borderRadius: _pdfCorners(e.corners),
         ),
         padding: pw.EdgeInsets.all(_pxToPt(e.padding)),
         child: content,

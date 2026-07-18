@@ -1,4 +1,7 @@
 import 'dart:convert';
+
+import 'package:flutter/painting.dart' show BorderRadius, Radius;
+
 import 'gradient_def.dart';
 
 int _counter = 0;
@@ -6,6 +9,93 @@ int _counter = 0;
 String generateId() {
   final ts = DateTime.now().millisecondsSinceEpoch;
   return 'el_${ts}_${_counter++}';
+}
+
+/// Corner radius: uniform [borderRadius] and optional per-corner overrides.
+///
+/// When all four corner fields are null, [borderRadius] applies to every corner
+/// (linked / uniform mode). When any corner is set, that value is used for that
+/// corner and unset corners fall back to [borderRadius].
+class CornerRadii {
+  final double borderRadius;
+  final double? borderRadiusTL;
+  final double? borderRadiusTR;
+  final double? borderRadiusBR;
+  final double? borderRadiusBL;
+
+  const CornerRadii({
+    this.borderRadius = 0,
+    this.borderRadiusTL,
+    this.borderRadiusTR,
+    this.borderRadiusBR,
+    this.borderRadiusBL,
+  });
+
+  bool get isUniform =>
+      borderRadiusTL == null &&
+      borderRadiusTR == null &&
+      borderRadiusBR == null &&
+      borderRadiusBL == null;
+
+  double get topLeft => borderRadiusTL ?? borderRadius;
+  double get topRight => borderRadiusTR ?? borderRadius;
+  double get bottomRight => borderRadiusBR ?? borderRadius;
+  double get bottomLeft => borderRadiusBL ?? borderRadius;
+
+  BorderRadius toBorderRadius() {
+    if (isUniform) return BorderRadius.circular(borderRadius);
+    return BorderRadius.only(
+      topLeft: Radius.circular(topLeft),
+      topRight: Radius.circular(topRight),
+      bottomRight: Radius.circular(bottomRight),
+      bottomLeft: Radius.circular(bottomLeft),
+    );
+  }
+
+  /// Linked mode: all corners use [uniform], per-corner overrides cleared.
+  CornerRadii asUniform(double uniform) => CornerRadii(borderRadius: uniform);
+
+  /// Unlinked mode: initialize each corner from current resolved values.
+  CornerRadii asUnlinked() => CornerRadii(
+        borderRadius: borderRadius,
+        borderRadiusTL: topLeft,
+        borderRadiusTR: topRight,
+        borderRadiusBR: bottomRight,
+        borderRadiusBL: bottomLeft,
+      );
+
+  CornerRadii copyWith({
+    double? borderRadius,
+    double? borderRadiusTL,
+    double? borderRadiusTR,
+    double? borderRadiusBR,
+    double? borderRadiusBL,
+    bool clearCorners = false,
+  }) =>
+      CornerRadii(
+        borderRadius: borderRadius ?? this.borderRadius,
+        borderRadiusTL: clearCorners ? null : (borderRadiusTL ?? this.borderRadiusTL),
+        borderRadiusTR: clearCorners ? null : (borderRadiusTR ?? this.borderRadiusTR),
+        borderRadiusBR: clearCorners ? null : (borderRadiusBR ?? this.borderRadiusBR),
+        borderRadiusBL: clearCorners ? null : (borderRadiusBL ?? this.borderRadiusBL),
+      );
+
+  Map<String, dynamic> toJsonFields() => {
+        'borderRadius': borderRadius,
+        if (borderRadiusTL != null) 'borderRadiusTL': borderRadiusTL,
+        if (borderRadiusTR != null) 'borderRadiusTR': borderRadiusTR,
+        if (borderRadiusBR != null) 'borderRadiusBR': borderRadiusBR,
+        if (borderRadiusBL != null) 'borderRadiusBL': borderRadiusBL,
+      };
+
+  factory CornerRadii.fromJson(Map<String, dynamic> j, {double defaultRadius = 0}) =>
+      CornerRadii(
+        borderRadius: (j['borderRadius'] as num? ?? defaultRadius).toDouble(),
+        borderRadiusTL: (j['borderRadiusTL'] as num?)?.toDouble(),
+        borderRadiusTR: (j['borderRadiusTR'] as num?)?.toDouble(),
+        borderRadiusBR: (j['borderRadiusBR'] as num?)?.toDouble(),
+        borderRadiusBL: (j['borderRadiusBL'] as num?)?.toDouble(),
+      );
 }
 
 // ── Flex child base ──────────────────────────────────────────────────────────
@@ -271,6 +361,10 @@ class ShapeElement implements CanvasElement {
   final String stroke;
   final double strokeWidth;
   final double borderRadius;
+  final double? borderRadiusTL;
+  final double? borderRadiusTR;
+  final double? borderRadiusBR;
+  final double? borderRadiusBL;
   final GradientDef? gradient;
   final String? boxShadow;
 
@@ -291,11 +385,23 @@ class ShapeElement implements CanvasElement {
     this.stroke = '#1A1A1A',
     this.strokeWidth = 1,
     this.borderRadius = 4,
+    this.borderRadiusTL,
+    this.borderRadiusTR,
+    this.borderRadiusBR,
+    this.borderRadiusBL,
     this.gradient,
     this.boxShadow,
     this.flex,
     this.alignSelf,
   });
+
+  CornerRadii get corners => CornerRadii(
+        borderRadius: borderRadius,
+        borderRadiusTL: borderRadiusTL,
+        borderRadiusTR: borderRadiusTR,
+        borderRadiusBR: borderRadiusBR,
+        borderRadiusBL: borderRadiusBL,
+      );
 
   static ShapeElement create(String shape) => ShapeElement(
         id: generateId(),
@@ -330,6 +436,11 @@ class ShapeElement implements CanvasElement {
     String? stroke,
     double? strokeWidth,
     double? borderRadius,
+    double? borderRadiusTL,
+    double? borderRadiusTR,
+    double? borderRadiusBR,
+    double? borderRadiusBL,
+    bool clearCornerRadii = false,
     GradientDef? gradient,
     bool clearGradient = false,
     String? boxShadow,
@@ -351,6 +462,10 @@ class ShapeElement implements CanvasElement {
         stroke: stroke ?? this.stroke,
         strokeWidth: strokeWidth ?? this.strokeWidth,
         borderRadius: borderRadius ?? this.borderRadius,
+        borderRadiusTL: clearCornerRadii ? null : (borderRadiusTL ?? this.borderRadiusTL),
+        borderRadiusTR: clearCornerRadii ? null : (borderRadiusTR ?? this.borderRadiusTR),
+        borderRadiusBR: clearCornerRadii ? null : (borderRadiusBR ?? this.borderRadiusBR),
+        borderRadiusBL: clearCornerRadii ? null : (borderRadiusBL ?? this.borderRadiusBL),
         gradient: clearGradient ? null : (gradient ?? this.gradient),
         boxShadow: clearShadow ? null : (boxShadow ?? this.boxShadow),
         flex: flex ?? this.flex,
@@ -372,34 +487,41 @@ class ShapeElement implements CanvasElement {
         'fill': fill,
         'stroke': stroke,
         'strokeWidth': strokeWidth,
-        'borderRadius': borderRadius,
+        ...corners.toJsonFields(),
         if (gradient != null) 'gradient': gradient!.toJson(),
         if (boxShadow != null) 'boxShadow': boxShadow,
         if (flex != null) 'flex': flex,
         if (alignSelf != null) 'alignSelf': alignSelf,
       };
 
-  factory ShapeElement.fromJson(Map<String, dynamic> j) => ShapeElement(
-        id: j['id'] as String,
-        x: (j['x'] as num?)?.toDouble(),
-        y: (j['y'] as num?)?.toDouble(),
-        width: (j['width'] as num?)?.toDouble(),
-        height: (j['height'] as num?)?.toDouble(),
-        rotation: (j['rotation'] as num? ?? 0).toDouble(),
-        opacity: (j['opacity'] as num? ?? 1).toDouble(),
-        zIndex: (j['zIndex'] as int? ?? 1),
-        shape: j['shape'] as String? ?? 'rectangle',
-        fill: j['fill'] as String? ?? '#E8E6E1',
-        stroke: j['stroke'] as String? ?? '#1A1A1A',
-        strokeWidth: (j['strokeWidth'] as num? ?? 1).toDouble(),
-        borderRadius: (j['borderRadius'] as num? ?? 4).toDouble(),
-        gradient: j['gradient'] != null
-            ? GradientDef.fromJson(j['gradient'] as Map<String, dynamic>)
-            : null,
-        boxShadow: j['boxShadow'] as String?,
-        flex: j['flex'] as int?,
-        alignSelf: j['alignSelf'] as String?,
-      );
+  factory ShapeElement.fromJson(Map<String, dynamic> j) {
+    final c = CornerRadii.fromJson(j, defaultRadius: 4);
+    return ShapeElement(
+      id: j['id'] as String,
+      x: (j['x'] as num?)?.toDouble(),
+      y: (j['y'] as num?)?.toDouble(),
+      width: (j['width'] as num?)?.toDouble(),
+      height: (j['height'] as num?)?.toDouble(),
+      rotation: (j['rotation'] as num? ?? 0).toDouble(),
+      opacity: (j['opacity'] as num? ?? 1).toDouble(),
+      zIndex: (j['zIndex'] as int? ?? 1),
+      shape: j['shape'] as String? ?? 'rectangle',
+      fill: j['fill'] as String? ?? '#E8E6E1',
+      stroke: j['stroke'] as String? ?? '#1A1A1A',
+      strokeWidth: (j['strokeWidth'] as num? ?? 1).toDouble(),
+      borderRadius: c.borderRadius,
+      borderRadiusTL: c.borderRadiusTL,
+      borderRadiusTR: c.borderRadiusTR,
+      borderRadiusBR: c.borderRadiusBR,
+      borderRadiusBL: c.borderRadiusBL,
+      gradient: j['gradient'] != null
+          ? GradientDef.fromJson(j['gradient'] as Map<String, dynamic>)
+          : null,
+      boxShadow: j['boxShadow'] as String?,
+      flex: j['flex'] as int?,
+      alignSelf: j['alignSelf'] as String?,
+    );
+  }
 }
 
 // ── Image Element ────────────────────────────────────────────────────────────
@@ -429,6 +551,10 @@ class ImageElement implements CanvasElement {
   final String src;
   final String objectFit;
   final double borderRadius;
+  final double? borderRadiusTL;
+  final double? borderRadiusTR;
+  final double? borderRadiusBR;
+  final double? borderRadiusBL;
   final String? boxShadow;
 
   final int? flex;
@@ -446,10 +572,22 @@ class ImageElement implements CanvasElement {
     this.src = '',
     this.objectFit = 'cover',
     this.borderRadius = 0,
+    this.borderRadiusTL,
+    this.borderRadiusTR,
+    this.borderRadiusBR,
+    this.borderRadiusBL,
     this.boxShadow,
     this.flex,
     this.alignSelf,
   });
+
+  CornerRadii get corners => CornerRadii(
+        borderRadius: borderRadius,
+        borderRadiusTL: borderRadiusTL,
+        borderRadiusTR: borderRadiusTR,
+        borderRadiusBR: borderRadiusBR,
+        borderRadiusBL: borderRadiusBL,
+      );
 
   static ImageElement create() => ImageElement(
         id: generateId(),
@@ -478,6 +616,11 @@ class ImageElement implements CanvasElement {
     String? src,
     String? objectFit,
     double? borderRadius,
+    double? borderRadiusTL,
+    double? borderRadiusTR,
+    double? borderRadiusBR,
+    double? borderRadiusBL,
+    bool clearCornerRadii = false,
     String? boxShadow,
     bool clearShadow = false,
     int? flex,
@@ -495,6 +638,10 @@ class ImageElement implements CanvasElement {
         src: src ?? this.src,
         objectFit: objectFit ?? this.objectFit,
         borderRadius: borderRadius ?? this.borderRadius,
+        borderRadiusTL: clearCornerRadii ? null : (borderRadiusTL ?? this.borderRadiusTL),
+        borderRadiusTR: clearCornerRadii ? null : (borderRadiusTR ?? this.borderRadiusTR),
+        borderRadiusBR: clearCornerRadii ? null : (borderRadiusBR ?? this.borderRadiusBR),
+        borderRadiusBL: clearCornerRadii ? null : (borderRadiusBL ?? this.borderRadiusBL),
         boxShadow: clearShadow ? null : (boxShadow ?? this.boxShadow),
         flex: flex ?? this.flex,
         alignSelf: alignSelf ?? this.alignSelf,
@@ -513,28 +660,35 @@ class ImageElement implements CanvasElement {
         'zIndex': zIndex,
         'src': src,
         'objectFit': objectFit,
-        'borderRadius': borderRadius,
+        ...corners.toJsonFields(),
         if (boxShadow != null) 'boxShadow': boxShadow,
         if (flex != null) 'flex': flex,
         if (alignSelf != null) 'alignSelf': alignSelf,
       };
 
-  factory ImageElement.fromJson(Map<String, dynamic> j) => ImageElement(
-        id: j['id'] as String,
-        x: (j['x'] as num?)?.toDouble(),
-        y: (j['y'] as num?)?.toDouble(),
-        width: (j['width'] as num?)?.toDouble(),
-        height: (j['height'] as num?)?.toDouble(),
-        rotation: (j['rotation'] as num? ?? 0).toDouble(),
-        opacity: (j['opacity'] as num? ?? 1).toDouble(),
-        zIndex: (j['zIndex'] as int? ?? 1),
-        src: j['src'] as String? ?? '',
-        objectFit: j['objectFit'] as String? ?? 'cover',
-        borderRadius: (j['borderRadius'] as num? ?? 0).toDouble(),
-        boxShadow: j['boxShadow'] as String?,
-        flex: j['flex'] as int?,
-        alignSelf: j['alignSelf'] as String?,
-      );
+  factory ImageElement.fromJson(Map<String, dynamic> j) {
+    final c = CornerRadii.fromJson(j);
+    return ImageElement(
+      id: j['id'] as String,
+      x: (j['x'] as num?)?.toDouble(),
+      y: (j['y'] as num?)?.toDouble(),
+      width: (j['width'] as num?)?.toDouble(),
+      height: (j['height'] as num?)?.toDouble(),
+      rotation: (j['rotation'] as num? ?? 0).toDouble(),
+      opacity: (j['opacity'] as num? ?? 1).toDouble(),
+      zIndex: (j['zIndex'] as int? ?? 1),
+      src: j['src'] as String? ?? '',
+      objectFit: j['objectFit'] as String? ?? 'cover',
+      borderRadius: c.borderRadius,
+      borderRadiusTL: c.borderRadiusTL,
+      borderRadiusTR: c.borderRadiusTR,
+      borderRadiusBR: c.borderRadiusBR,
+      borderRadiusBL: c.borderRadiusBL,
+      boxShadow: j['boxShadow'] as String?,
+      flex: j['flex'] as int?,
+      alignSelf: j['alignSelf'] as String?,
+    );
+  }
 }
 
 // ── QR Element ───────────────────────────────────────────────────────────────
@@ -823,6 +977,10 @@ class ContainerElement implements CanvasElement {
   final String background;
   final GradientDef? gradient;
   final double borderRadius;
+  final double? borderRadiusTL;
+  final double? borderRadiusTR;
+  final double? borderRadiusBR;
+  final double? borderRadiusBL;
   final String? boxShadow;
   final bool locked;
   final List<CanvasElement> children;
@@ -850,12 +1008,24 @@ class ContainerElement implements CanvasElement {
     this.background = 'transparent',
     this.gradient,
     this.borderRadius = 0,
+    this.borderRadiusTL,
+    this.borderRadiusTR,
+    this.borderRadiusBR,
+    this.borderRadiusBL,
     this.boxShadow,
     this.locked = false,
     this.children = const [],
     this.flex,
     this.alignSelf,
   });
+
+  CornerRadii get corners => CornerRadii(
+        borderRadius: borderRadius,
+        borderRadiusTL: borderRadiusTL,
+        borderRadiusTR: borderRadiusTR,
+        borderRadiusBR: borderRadiusBR,
+        borderRadiusBL: borderRadiusBL,
+      );
 
   static ContainerElement createSection(String type) => ContainerElement(
         id: generateId(),
@@ -911,6 +1081,11 @@ class ContainerElement implements CanvasElement {
     GradientDef? gradient,
     bool clearGradient = false,
     double? borderRadius,
+    double? borderRadiusTL,
+    double? borderRadiusTR,
+    double? borderRadiusBR,
+    double? borderRadiusBL,
+    bool clearCornerRadii = false,
     String? boxShadow,
     bool clearShadow = false,
     bool? locked,
@@ -937,6 +1112,10 @@ class ContainerElement implements CanvasElement {
         background: background ?? this.background,
         gradient: clearGradient ? null : (gradient ?? this.gradient),
         borderRadius: borderRadius ?? this.borderRadius,
+        borderRadiusTL: clearCornerRadii ? null : (borderRadiusTL ?? this.borderRadiusTL),
+        borderRadiusTR: clearCornerRadii ? null : (borderRadiusTR ?? this.borderRadiusTR),
+        borderRadiusBR: clearCornerRadii ? null : (borderRadiusBR ?? this.borderRadiusBR),
+        borderRadiusBL: clearCornerRadii ? null : (borderRadiusBL ?? this.borderRadiusBL),
         boxShadow: clearShadow ? null : (boxShadow ?? this.boxShadow),
         locked: locked ?? this.locked,
         children: children ?? this.children,
@@ -963,7 +1142,7 @@ class ContainerElement implements CanvasElement {
         'freePlacement': freePlacement,
         'background': background,
         if (gradient != null) 'gradient': gradient!.toJson(),
-        'borderRadius': borderRadius,
+        ...corners.toJsonFields(),
         if (boxShadow != null) 'boxShadow': boxShadow,
         'locked': locked,
         'children': children.map((c) => c.toJson()).toList(),
@@ -971,38 +1150,44 @@ class ContainerElement implements CanvasElement {
         if (alignSelf != null) 'alignSelf': alignSelf,
       };
 
-  factory ContainerElement.fromJson(Map<String, dynamic> j) =>
-      ContainerElement(
-        id: j['id'] as String,
-        type: j['type'] as String,
-        x: (j['x'] as num?)?.toDouble(),
-        y: (j['y'] as num?)?.toDouble(),
-        width: (j['width'] as num?)?.toDouble(),
-        height: (j['height'] as num?)?.toDouble(),
-        rotation: (j['rotation'] as num? ?? 0).toDouble(),
-        opacity: (j['opacity'] as num? ?? 1).toDouble(),
-        zIndex: (j['zIndex'] as int? ?? 1),
-        isSection: j['isSection'] as bool? ?? false,
-        minHeight: (j['minHeight'] as num? ?? 60).toDouble(),
-        gap: (j['gap'] as num? ?? 8).toDouble(),
-        padding: (j['padding'] as num? ?? 8).toDouble(),
-        alignItems: j['alignItems'] as String? ?? 'flex-start',
-        freePlacement: j['freePlacement'] as bool? ?? false,
-        background: j['background'] as String? ?? 'transparent',
-        gradient: j['gradient'] != null
-            ? GradientDef.fromJson(j['gradient'] as Map<String, dynamic>)
-            : null,
-        borderRadius: (j['borderRadius'] as num? ?? 0).toDouble(),
-        boxShadow: j['boxShadow'] as String?,
-        locked: j['locked'] as bool? ?? false,
-        children: j['children'] != null
-            ? (j['children'] as List)
-                .map((c) => CanvasElement.fromJson(c as Map<String, dynamic>))
-                .toList()
-            : [],
-        flex: j['flex'] as int?,
-        alignSelf: j['alignSelf'] as String?,
-      );
+  factory ContainerElement.fromJson(Map<String, dynamic> j) {
+    final c = CornerRadii.fromJson(j);
+    return ContainerElement(
+      id: j['id'] as String,
+      type: j['type'] as String,
+      x: (j['x'] as num?)?.toDouble(),
+      y: (j['y'] as num?)?.toDouble(),
+      width: (j['width'] as num?)?.toDouble(),
+      height: (j['height'] as num?)?.toDouble(),
+      rotation: (j['rotation'] as num? ?? 0).toDouble(),
+      opacity: (j['opacity'] as num? ?? 1).toDouble(),
+      zIndex: (j['zIndex'] as int? ?? 1),
+      isSection: j['isSection'] as bool? ?? false,
+      minHeight: (j['minHeight'] as num? ?? 60).toDouble(),
+      gap: (j['gap'] as num? ?? 8).toDouble(),
+      padding: (j['padding'] as num? ?? 8).toDouble(),
+      alignItems: j['alignItems'] as String? ?? 'flex-start',
+      freePlacement: j['freePlacement'] as bool? ?? false,
+      background: j['background'] as String? ?? 'transparent',
+      gradient: j['gradient'] != null
+          ? GradientDef.fromJson(j['gradient'] as Map<String, dynamic>)
+          : null,
+      borderRadius: c.borderRadius,
+      borderRadiusTL: c.borderRadiusTL,
+      borderRadiusTR: c.borderRadiusTR,
+      borderRadiusBR: c.borderRadiusBR,
+      borderRadiusBL: c.borderRadiusBL,
+      boxShadow: j['boxShadow'] as String?,
+      locked: j['locked'] as bool? ?? false,
+      children: j['children'] != null
+          ? (j['children'] as List)
+              .map((c) => CanvasElement.fromJson(c as Map<String, dynamic>))
+              .toList()
+          : [],
+      flex: j['flex'] as int?,
+      alignSelf: j['alignSelf'] as String?,
+    );
+  }
 }
 
 // ── Tree utilities ────────────────────────────────────────────────────────────

@@ -159,7 +159,7 @@ class _TreeNodeState extends State<_TreeNode> {
               if (widget.el is ContainerElement &&
                   (widget.el as ContainerElement).locked)
                 const Icon(Icons.lock_outline,
-                    size: 9, color: Color(0xFFF59E0B)),
+                    size: 9, color: AppColors.warning),
               // Actions on hover
               if (_hovered || isSelected) ...[
                 const SizedBox(width: 2),

@@ -1,3 +1,5 @@
+import 'package:uuid/uuid.dart';
+
 import '../models/template_model.dart';
 import 'template_service.dart';
 
@@ -13,47 +15,22 @@ import 'template_service.dart';
 ///   AppwriteTemplateStorage(this._db);
 ///
 ///   @override
-///   Future<Template?> getById(String id) async {
-///     try {
-///       final doc = await _db.getDocument(
-///         databaseId: 'repairx',
-///         collectionId: 'templates',
-///         documentId: id,
-///       );
-///       return Template.fromJson(doc.data);
-///     } catch (_) {
-///       return null;
-///     }
-///   }
+///   Future<Template?> getById(String id) async { ... }
 ///
 ///   @override
-///   Future<Template> save(Template template) async {
-///     await _db.updateDocument(
-///       databaseId: 'repairx',
-///       collectionId: 'templates',
-///       documentId: template.id,
-///       data: template.toJson(),
-///     );
-///     return template;
-///   }
+///   Future<Template> save(Template template) async { ... }
 ///
 ///   @override
-///   Future<void> delete(String id) => _db.deleteDocument(
-///     databaseId: 'repairx',
-///     collectionId: 'templates',
-///     documentId: id,
-///   );
+///   Future<Template> create({...}) async { ... }
 ///
 ///   @override
-///   Future<List<Template>> list({String? ownerId}) async {
-///     final docs = await _db.listDocuments(
-///       databaseId: 'repairx',
-///       collectionId: 'templates',
-///     );
-///     return docs.documents
-///         .map((d) => Template.fromJson(d.data))
-///         .toList();
-///   }
+///   Future<void> delete(String id) async { ... }
+///
+///   @override
+///   Future<List<Template>> list({String? ownerId}) async { ... }
+///
+///   @override
+///   Future<Template> duplicate(Template template, String ownerId) async { ... }
 /// }
 ///
 /// // Register at startup:
@@ -66,11 +43,30 @@ abstract class PapercraftStorage {
   /// Persist a template (create or update). Returns the saved template.
   Future<Template> save(Template template);
 
+  /// Create a new template with the given metadata.
+  Future<Template> create({
+    required String name,
+    required String docType,
+    required String canvasSize,
+    required double widthMm,
+    required double heightMm,
+    required String ownerId,
+    String? printerName,
+    String? printerId,
+  });
+
   /// Delete a template by id.
   Future<void> delete(String id);
 
   /// List all templates, optionally filtered by owner.
   Future<List<Template>> list({String? ownerId});
+
+  /// Duplicate [template] under [ownerId].
+  Future<Template> duplicate(Template template, String ownerId);
+
+  /// Seed demo templates for [ownerId] if the store is empty.
+  /// Default no-op — override for local/dev storages.
+  Future<void> seedDefaults(String ownerId) async {}
 }
 
 // ── Default on-device implementation ─────────────────────────────────────────
@@ -87,11 +83,41 @@ class SharedPrefsStorage implements PapercraftStorage {
   Future<Template> save(Template template) => TemplateService.update(template);
 
   @override
+  Future<Template> create({
+    required String name,
+    required String docType,
+    required String canvasSize,
+    required double widthMm,
+    required double heightMm,
+    required String ownerId,
+    String? printerName,
+    String? printerId,
+  }) =>
+      TemplateService.create(
+        name: name,
+        docType: docType,
+        canvasSize: canvasSize,
+        widthMm: widthMm,
+        heightMm: heightMm,
+        ownerId: ownerId,
+        printerName: printerName,
+        printerId: printerId,
+      );
+
+  @override
   Future<void> delete(String id) => TemplateService.delete(id);
 
   @override
   Future<List<Template>> list({String? ownerId}) =>
       ownerId != null ? TemplateService.list(ownerId) : Future.value([]);
+
+  @override
+  Future<Template> duplicate(Template template, String ownerId) =>
+      TemplateService.duplicate(template, ownerId);
+
+  @override
+  Future<void> seedDefaults(String ownerId) =>
+      TemplateService.seedDefaults(ownerId);
 }
 
 // ── Registry ──────────────────────────────────────────────────────────────────
@@ -110,4 +136,10 @@ class StorageRegistry {
   static PapercraftStorage get active => _active;
 
   static void register(PapercraftStorage storage) => _active = storage;
+
+  /// Reset to the default SharedPreferences storage (useful in tests).
+  static void reset() => _active = const SharedPrefsStorage();
 }
+
+/// Convenience: generate a new template id for custom storage backends.
+String newTemplateId() => const Uuid().v4();

@@ -6,6 +6,8 @@ Single import covers everything:
 import 'package:base44_flutter_label_creator/papercraft.dart';
 ```
 
+Papercraft is designed to be the template source for host apps (e.g. RepairX): design in the embeddable editor, persist via a storage adapter, associate local or external printers, and print/render **without** mounting the editor.
+
 ---
 
 ## Setup
@@ -19,16 +21,33 @@ dependencies:
     path: ../base44_flutter_label_creator
 ```
 
-### 2. Register your data adapter (optional — defaults to built-in mock data)
+### 2. Register adapters at startup (recommended)
 
 ```dart
-// main.dart
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  AdapterRegistry.register(RepairXAdapter(databases)); // see Data Adapter section
+
+  StorageRegistry.register(RepairXTemplateStorage(databases));
+  PrinterRegistry.register(CompositePrinterProvider([
+    const LocalPrinterProvider(),
+    ExternalPrinterProvider(
+      list: () async => repairXPrinters,
+      onPrintPdf: (printer, bytes, {jobName}) async {
+        await repairXPrintService.send(printer.id, bytes);
+      },
+    ),
+  ]));
+  AdapterRegistry.register(RepairXDataAdapter(databases));
+
   runApp(MyApp());
 }
 ```
+
+| Registry | Purpose | Default |
+|----------|---------|---------|
+| `StorageRegistry` | Template CRUD | `SharedPrefsStorage` |
+| `PrinterRegistry` | List + print to printers | `LocalPrinterProvider` (OS) |
+| `AdapterRegistry` | Data sidebar records | `MockDataAdapter` |
 
 ---
 
@@ -72,6 +91,18 @@ PapercraftEditor(
 When `dataSource` is provided the left data-source sidebar is hidden — your
 app is the source of truth. Tokens on the canvas resolve against `fields`.
 
+### Custom storage on one editor instance
+
+```dart
+PapercraftEditor(
+  templateId: id,
+  storage: myStorage, // overrides StorageRegistry.active for this instance
+  onSave: (t) => syncToHost(t),
+)
+```
+
+`onSave` fires after every successful persist (auto-save and explicit saves).
+
 ### Read-only preview
 
 ```dart
@@ -88,7 +119,7 @@ PapercraftEditor(
 PapercraftEditor(
   templateId: template.id,
   dataSource: dataSource,
-  mode: PapercraftMode.printReady,  // print dialog opens on load
+  mode: PapercraftMode.printReady,
   onClose: () => Navigator.pop(context),
 )
 ```
@@ -101,8 +132,10 @@ PapercraftEditor(
 | `dataSource` | `PapercraftDataSource?` | null | Live record + entity. When set, left sidebar is hidden |
 | `mode` | `PapercraftMode` | `.edit` | Starting mode |
 | `onClose` | `VoidCallback?` | null | Back button handler. If null back button is hidden |
-| `onSave` | `void Function(Template)?` | null | Called after each save |
+| `onSave` | `void Function(Template)?` | null | Called after each successful save |
 | `onPrint` | `void Function(Template, Map)?` | null | Called after confirming print |
+| `controller` | `PapercraftController?` | null | Programmatic undo/redo/zoom/save |
+| `storage` | `PapercraftStorage?` | `StorageRegistry.active` | Template I/O back-end |
 | `showPropertiesPanel` | `bool` | true | Show/hide right properties panel |
 
 ### PapercraftMode values
@@ -115,132 +148,156 @@ PapercraftEditor(
 
 ---
 
-## PapercraftDataSource
+## Template storage adapter
 
-Describes a live record to inject into the canvas.
+Implement `PapercraftStorage` and register it so all create/load/save/list/delete/duplicate goes through your backend.
+
+```dart
+abstract class PapercraftStorage {
+  Future<Template?> getById(String id);
+  Future<Template> save(Template template);
+  Future<Template> create({
+    required String name,
+    required String docType,
+    required String canvasSize,
+    required double widthMm,
+    required double heightMm,
+    required String ownerId,
+    String? printerName,
+    String? printerId,
+  });
+  Future<void> delete(String id);
+  Future<List<Template>> list({String? ownerId});
+  Future<Template> duplicate(Template template, String ownerId);
+  Future<void> seedDefaults(String ownerId); // optional
+}
+```
+
+```dart
+StorageRegistry.register(AppwriteTemplateStorage(databases));
+
+// Create without the dashboard UI:
+final template = await StorageRegistry.active.create(
+  name: 'Repair Ticket',
+  docType: 'document',
+  canvasSize: 'A4',
+  widthMm: 210,
+  heightMm: 297,
+  ownerId: currentUserId,
+  printerName: 'Shop Laser',
+  printerId: 'printer_shop_laser',
+);
+```
+
+---
+
+## Printer association (local + external)
+
+Templates store `printerName` and optional `printerId`. Association UI lists printers from `PrinterRegistry`.
+
+```dart
+class PapercraftPrinter {
+  final String id;
+  final String name;
+  final bool isLocal; // OS vs host-managed
+  // ...
+}
+
+abstract class PrinterProvider {
+  Future<List<PapercraftPrinter>> listPrinters();
+  Future<void> printPdf(PapercraftPrinter printer, Uint8List bytes, {String? jobName});
+  Future<PapercraftPrinter?> resolveAssociated(Template template);
+}
+```
+
+Built-ins:
+
+- `LocalPrinterProvider` — `Printing.listPrinters()` + `directPrintPdf`
+- `ExternalPrinterProvider` — host-supplied list + optional print handler
+- `CompositePrinterProvider` — merge several providers (dedupe by id)
+
+Associate in the editor bottom bar, new-template “From Printer” flow, or print preview dropdown. Persist goes through the storage adapter.
+
+---
+
+## Headless use (no editor)
+
+You do **not** need `PapercraftEditor` to preview or print.
+
+### Load + render inline
+
+```dart
+final template = await StorageRegistry.active.getById(id);
+if (template == null) return;
+final elements = elementsFromJson(template.elements);
+
+PapercraftRenderer.fitted(
+  template: template,
+  elements: elements,
+  record: {
+    'customer.name': 'Jane Doe',
+    'order.number': 'WO-4821',
+  },
+  entityName: 'orders',
+);
+```
+
+### PDF bytes
+
+```dart
+final bytes = await PapercraftPrint.buildPdf(
+  template: template,
+  elements: elements,
+  record: record,
+  entityName: 'orders',
+);
+```
+
+### Auto-print to the template’s associated printer
+
+```dart
+try {
+  await PapercraftPrint.printToAssociatedPrinter(
+    context: context, // optional — shows themed error dialog on failure
+    template: template,
+    elements: elements,
+    record: record,
+  );
+} on PrinterUnavailableException catch (e) {
+  // Local printer missing / offline / not associated
+  // If context was passed, a dialog was already shown.
+}
+```
+
+Without `context`, the method only throws — suitable for service / background code.
+
+Also available: `PapercraftPrint.print` (OS dialog), `printBatch`, `printSheet`, `buildPdfBatch`, `buildSheetPdf`.
+
+---
+
+## PapercraftDataSource
 
 ```dart
 PapercraftDataSource(
-  entityName: 'work_order',           // matches token namespace {{work_order.x}}
+  entityName: 'work_order',
   fields: {
-    'work_order.number': 'WO-4821',   // key = namespace.field
+    'work_order.number': 'WO-4821',
     'customer.name':     'Jane Doe',
-    'device.model':      'iPhone 15',
   },
-  computedFields: [                   // optional formula fields
+  computedFields: [
     ComputedField(name: 'vat', formula: 'price * 0.21'),
   ],
 )
 ```
 
-Keys in `fields` must follow the `namespace.field` convention to match
-`{{namespace.field}}` tokens placed on the canvas.
+Keys must follow `namespace.field` to match `{{namespace.field}}` tokens.
 
 ---
 
-## PapercraftRenderer
-
-Read-only canvas widget. No editor chrome. Use for thumbnails, dashboards,
-confirmation screens — anywhere you want to show a filled template inline.
-
-```dart
-// Fixed scale (1.0 = full canvas pixel size, which is large):
-PapercraftRenderer(
-  template: template,
-  elements: elements,
-  record: {'customer.name': 'Jane', 'order.number': 'WO-99'},
-  entityName: 'orders',
-  scale: 0.3,
-)
-
-// Auto-fit into the available space (recommended for most uses):
-PapercraftRenderer.fitted(
-  template: template,
-  elements: elements,
-  record: record,
-  entityName: 'orders',
-  maxScale: 1.0,   // never exceed 100%
-)
-```
-
-### Parameters
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `template` | `Template` | required | Template metadata |
-| `elements` | `List<CanvasElement>` | required | Canvas elements |
-| `record` | `Map<String, dynamic>?` | null | Flat `'namespace.field'` → value map |
-| `entityName` | `String?` | null | Token resolution context |
-| `computedFields` | `List<ComputedField>` | `[]` | Formula-derived fields |
-| `scale` | `double` | `1.0` | Scale factor |
-
-`.fitted()` has an extra `maxScale` parameter (default `1.0`).
-
----
-
-## PapercraftPrint
-
-Print or export PDF without showing the editor UI.
-
-```dart
-// Open OS print dialog:
-await PapercraftPrint.print(
-  template: template,
-  elements: elements,
-  record: {
-    'customer.name': 'Jane Doe',
-    'order.number':  'WO-4821',
-  },
-  entityName: 'orders',
-);
-
-// Get raw PDF bytes (upload, email, archive):
-final Uint8List bytes = await PapercraftPrint.buildPdf(
-  template: template,
-  elements: elements,
-  record: record,
-  entityName: 'orders',
-);
-```
-
-Both methods share the same parameters:
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `template` | `Template` | Template metadata |
-| `elements` | `List<CanvasElement>` | Canvas elements |
-| `record` | `Map<String, dynamic>?` | Flat field map |
-| `entityName` | `String?` | Token context |
-| `computedFields` | `List<ComputedField>` | Formula fields |
-
----
-
-## Creating a template
-
-```dart
-final template = await TemplateService.create(
-  name: 'Repair Ticket',
-  docType: 'document',        // 'label' | 'document'
-  canvasSize: 'A4',
-  widthMm: 210,
-  heightMm: 297,
-  ownerId: currentUserId,
-  printerName: 'HP LaserJet', // optional — associates template with a printer
-);
-```
-
----
-
-## Data adapter
-
-Lets the built-in left sidebar picker load live records from your back-end.
-Register once — the sidebar uses it automatically.
+## Data adapter (sidebar picker)
 
 ```dart
 class RepairXAdapter extends AppwriteAdapterBase {
-  final Databases _db;
-  RepairXAdapter(this._db);
-
   @override String get displayName => 'RepairX';
 
   @override
@@ -249,30 +306,7 @@ class RepairXAdapter extends AppwriteAdapterBase {
 
   @override
   Future<List<DataRecord>> fetchRecords(String entity, {int limit = 10}) async {
-    final docs = await _db.listDocuments(
-      databaseId: 'repairx',
-      collectionId: entity,
-      queries: [Query.limit(limit)],
-    );
-    return docs.documents.map((d) => DataRecord(
-      displayName: d.data['title'] ?? d.$id,
-      subtitle:    d.data['status'] ?? '',
-      flat:        _flatten(d.data),
-    )).toList();
-  }
-
-  // Flatten nested maps: {'customer': {'name': 'x'}} → {'customer.name': 'x'}
-  Map<String, dynamic> _flatten(Map<String, dynamic> m, [String p = '']) {
-    final out = <String, dynamic>{};
-    for (final e in m.entries) {
-      final key = p.isEmpty ? e.key : '$p.${e.key}';
-      if (e.value is Map<String, dynamic>) {
-        out.addAll(_flatten(e.value as Map<String, dynamic>, key));
-      } else {
-        out[key] = e.value;
-      }
-    }
-    return out;
+    // return DataRecord(displayName, subtitle, flat: {...})
   }
 }
 
@@ -280,8 +314,9 @@ AdapterRegistry.register(RepairXAdapter(databases));
 ```
 
 Connection indicator in the left sidebar:
-- **Green** — real adapter active (shows `displayName`, e.g. "RepairX")
-- **Amber** — MockDataAdapter active (offline / design mode)
+
+- **Green** — real adapter active (`displayName`)
+- **Amber** — `MockDataAdapter` (design mode)
 - **Red** — explicitly disconnected
 
 ---
@@ -295,18 +330,70 @@ Connection indicator in the left sidebar:
 | `{{field\|date:dd/MM/yy}}` | `{{order.date\|date:dd/MM/yy}}` | `25/06/26` |
 | `{{field\|trim}}` | `{{product.sku\|trim}}` | whitespace stripped |
 
----
-
-## Paper sizes
+Headless resolution:
 
 ```dart
-final sizes = PaperSizeService.all;       // List<PaperSize>
-final a4    = PaperSizeService.find('A4');
-// PaperSize: id, label, widthMm, heightMm
+TokenService.resolveTokens(content, record, entityName, computedFields);
 ```
 
 ---
 
-## Roadmap
+## Corner radius
 
-All planned items are implemented. Nothing is pending.
+Shape, image, row, and col elements support:
+
+- **Uniform** — single `borderRadius` (linked)
+- **Per corner** — `borderRadiusTL` / `TR` / `BR` / `BL`
+
+Serialized in template JSON; older templates with only `borderRadius` remain valid.
+
+---
+
+## Viewport behavior
+
+- Panning the document clamps so a minimum portion of the page stays visible.
+- Dragging elements near the viewport edge auto-pans the workspace.
+
+---
+
+## Paper sizes
+
+Built-in canvas sizes: `kCanvasSizes` on `Template` / `template_model.dart`.
+
+Custom sizes (user-defined, SharedPreferences):
+
+```dart
+final custom = await PaperSizeService.getAll(); // List<CustomPaperSize>
+await PaperSizeService.save(CustomPaperSize(...));
+```
+
+---
+
+## Design system
+
+Light theme tokens: `AppColors` + `AppTheme.light`. Host apps embedding chrome around Papercraft should wrap with `Theme(data: AppTheme.light, …)` or reuse the same tokens so dialogs and accents stay consistent. Dark mode is not implemented yet.
+
+---
+
+## PapercraftController
+
+```dart
+final ctrl = PapercraftController();
+
+PapercraftEditor(templateId: id, controller: ctrl);
+
+await ctrl.save();
+ctrl.undo();
+ctrl.redo();
+ctrl.zoomIn();
+```
+
+---
+
+## RepairX integration recipe
+
+1. Register `PapercraftStorage` backed by your DB.
+2. Register `CompositePrinterProvider` (local OS + RepairX printers).
+3. Embed `PapercraftEditor` for design; use `onSave` to refresh host lists.
+4. For work-order print flows, load the template + elements and call `PapercraftPrint.printToAssociatedPrinter` — no editor required.
+5. On `PrinterUnavailableException`, show your own UI or rely on the built-in dialog when you pass `context`.

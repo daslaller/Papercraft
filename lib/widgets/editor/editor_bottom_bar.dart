@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 import '../../models/template_model.dart';
 import '../../services/paper_size_service.dart';
-import '../../services/template_service.dart';
+import '../../services/printer_provider.dart';
 import '../../state/editor_state.dart';
 import '../../theme/app_colors.dart';
 
@@ -16,7 +15,7 @@ class EditorBottomBar extends StatefulWidget {
 }
 
 class _EditorBottomBarState extends State<EditorBottomBar> {
-  List<Printer> _printers = [];
+  List<PapercraftPrinter> _printers = [];
   List<CustomPaperSize> _customSizes = [];
   bool _loadingPrinters = true;
 
@@ -29,7 +28,7 @@ class _EditorBottomBarState extends State<EditorBottomBar> {
 
   Future<void> _loadPrinters() async {
     try {
-      final printers = await Printing.listPrinters();
+      final printers = await PrinterRegistry.active.listPrinters();
       if (mounted) setState(() { _printers = printers; _loadingPrinters = false; });
     } catch (_) {
       if (mounted) setState(() => _loadingPrinters = false);
@@ -61,8 +60,9 @@ class _EditorBottomBarState extends State<EditorBottomBar> {
         _PrinterDropdown(
           printers: _printers,
           loading: _loadingPrinters,
+          selectedId: template.printerId,
           selectedName: template.printerName,
-          onChanged: (name) => _savePrinter(context, state, template, name),
+          onChanged: (printer) => _savePrinter(context, state, template, printer),
         ),
 
         const Spacer(),
@@ -81,13 +81,18 @@ class _EditorBottomBarState extends State<EditorBottomBar> {
   }
 
   Future<void> _savePrinter(
-      BuildContext context, EditorState state, Template template, String? name) async {
+      BuildContext context,
+      EditorState state,
+      Template template,
+      PapercraftPrinter? printer) async {
     final updated = template.copyWith(
-      printerName: name,
-      clearPrinter: name == null,
+      printerName: printer?.name,
+      printerId: printer?.id,
+      clearPrinter: printer == null,
     );
-    await TemplateService.update(updated);
-    state.updateTemplate(updated);
+    final saved = await state.storage.save(updated);
+    state.updateTemplate(saved);
+    state.onSaved?.call(saved);
   }
 
   Future<void> _applySize(
@@ -208,22 +213,29 @@ class _EditorBottomBarState extends State<EditorBottomBar> {
 class _PrinterDropdown extends StatelessWidget {
   static const _noneValue = '__none__';
 
-  final List<Printer> printers;
+  final List<PapercraftPrinter> printers;
   final bool loading;
+  final String? selectedId;
   final String? selectedName;
-  final void Function(String?) onChanged;
+  final void Function(PapercraftPrinter?) onChanged;
 
   const _PrinterDropdown({
     required this.printers,
     required this.loading,
+    required this.selectedId,
     required this.selectedName,
     required this.onChanged,
   });
 
   String get _currentLabel {
-    if (selectedName == null) return 'None (dialog on print)';
-    final match = printers.where((p) => p.name == selectedName).firstOrNull;
-    return match?.name ?? selectedName!;
+    if (selectedId == null && selectedName == null) {
+      return 'None (dialog on print)';
+    }
+    final match = printers.where((p) =>
+        (selectedId != null && p.id == selectedId) ||
+        (selectedName != null && p.name == selectedName)).firstOrNull;
+    if (match == null) return selectedName ?? selectedId!;
+    return match.isLocal ? match.name : '${match.name} (external)';
   }
 
   @override
@@ -266,9 +278,10 @@ class _PrinterDropdown extends StatelessWidget {
             style: TextStyle(fontSize: 11)),
       ),
       ...printers.map((p) => PopupMenuItem<String>(
-            value: p.name,
+            value: p.id,
             height: 32,
-            child: Text(p.name,
+            child: Text(
+                p.isLocal ? p.name : '${p.name} (external)',
                 style: const TextStyle(fontSize: 11),
                 overflow: TextOverflow.ellipsis),
           )),
@@ -289,7 +302,11 @@ class _PrinterDropdown extends StatelessWidget {
     );
 
     if (selected == null) return;
-    onChanged(selected == _noneValue ? null : selected);
+    if (selected == _noneValue) {
+      onChanged(null);
+      return;
+    }
+    onChanged(printers.where((p) => p.id == selected).firstOrNull);
   }
 }
 

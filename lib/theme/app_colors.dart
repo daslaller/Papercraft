@@ -29,6 +29,14 @@ class AppColors {
   static const destructive        = Color(0xFFC0392B); // spec "danger"
   static const destructiveFgnd   = Color(0xFFFFFFFF);
   static const success            = Color(0xFF34C759); // spec "success"
+  static const warning            = Color(0xFFF59E0B);
+
+  // ── Glass / overlays (light theme only — dark mode deferred) ─────────────────
+  static const glassBar           = Color(0xEEFFFFFF);
+  static const glassPill          = Color(0xF7FFFFFF);
+  static const hairline          = Color(0x1A000000);
+  static const hairlineSoft       = Color(0x14000000);
+  static const inkFaint           = Color(0x59000000);
 
   // ── Borders (hairlines — three prominence levels) ────────────────────────────
   static const border  = Color(0xFFE0E0E4); // spec hairline dark

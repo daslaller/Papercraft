@@ -20,9 +20,9 @@ class ViewportNav extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           decoration: BoxDecoration(
-            color: const Color(0xF7FFFFFF),
+            color: AppColors.glassPill,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0x14000000)),
+            border: Border.all(color: AppColors.hairlineSoft),
             boxShadow: AppColors.shadowLg,
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -49,7 +49,7 @@ class ViewportNav extends StatelessWidget {
                 style: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w500,
-                    color: Color(0x8C000000)),
+                    color: AppColors.inkFaint),
               ),
             ),
             // Zoom in
@@ -137,7 +137,7 @@ void _showGridPitchDialog(BuildContext context, dynamic state) {
             onChanged: (v) => setState(() => pitch = v),
           ),
           const Text('Drag to set the grid cell size',
-              style: TextStyle(fontSize: 11, color: Colors.grey)),
+              style: TextStyle(fontSize: 11, color: AppColors.mutedForeground)),
         ]),
         actions: [
           TextButton(
@@ -198,7 +198,7 @@ class _NavButtonState extends State<_NavButton> {
               decoration: BoxDecoration(
                 color: widget.active
                     ? AppColors.accent
-                    : (_hovered ? const Color(0x14000000) : Colors.transparent),
+                    : (_hovered ? AppColors.hairlineSoft : Colors.transparent),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(
@@ -225,7 +225,7 @@ class _NavDivider extends StatelessWidget {
       width: 1,
       height: 16,
       margin: const EdgeInsets.symmetric(horizontal: 2),
-      color: const Color(0x1A000000),
+      color: AppColors.hairline,
     );
   }
 }

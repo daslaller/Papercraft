@@ -202,6 +202,17 @@ class _CanvasElementWidgetState extends State<CanvasElementWidget> {
 
   void _onDragMove(PointerMoveEvent e) {
     if (_startMx == null) return;
+    final editorState = context.read<EditorState>();
+    // Keep the document reachable — pan viewport when near edges.
+    final panBefore = editorState.panOffset;
+    editorState.autoPanForGlobalPointer(e.position);
+    final panDelta = editorState.panOffset - panBefore;
+    if (panDelta != Offset.zero) {
+      // Compensate so the dragged element stays under the cursor after pan.
+      _startX = _startX! - panDelta.dx / widget.scale;
+      _startY = _startY! - panDelta.dy / widget.scale;
+    }
+
     final dx = (e.position.dx - _startMx!) / widget.scale;
     final dy = (e.position.dy - _startMy!) / widget.scale;
     var nx = _startX! + dx;
@@ -307,13 +318,11 @@ class _CanvasElementWidgetState extends State<CanvasElementWidget> {
               width: 7,
               height: 7,
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppColors.card,
                 border: Border.all(
                     color: withAlpha(AppColors.foreground, 0.6), width: 1.5),
                 borderRadius: BorderRadius.circular(100),
-                boxShadow: const [
-                  BoxShadow(color: Color(0x26000000), blurRadius: 3, offset: Offset(0, 1)),
-                ],
+                boxShadow: AppColors.shadowSm,
               ),
             ),
           ),

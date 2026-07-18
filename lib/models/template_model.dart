@@ -39,7 +39,10 @@ class Template {
   final String elements; // JSON string
   final String? connectedEntity;
   final String? thumbnailUrl;
+  /// Human-readable printer name (display + fallback match).
   final String? printerName;
+  /// Stable printer id from [PapercraftPrinter.id] when associated.
+  final String? printerId;
   /// When true, new row/col containers are flow sections at the top of the page.
   /// When false, row/col are freely positioned on the canvas.
   final bool sectionLayoutEnabled;
@@ -59,6 +62,7 @@ class Template {
     this.connectedEntity,
     this.thumbnailUrl,
     this.printerName,
+    this.printerId,
     this.sectionLayoutEnabled = false,
     required this.ownerId,
     required this.createdDate,
@@ -77,6 +81,7 @@ class Template {
     bool clearEntity = false,
     String? thumbnailUrl,
     String? printerName,
+    String? printerId,
     bool clearPrinter = false,
     bool? sectionLayoutEnabled,
     DateTime? updatedDate,
@@ -94,6 +99,7 @@ class Template {
             clearEntity ? null : (connectedEntity ?? this.connectedEntity),
         thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
         printerName: clearPrinter ? null : (printerName ?? this.printerName),
+        printerId: clearPrinter ? null : (printerId ?? this.printerId),
         sectionLayoutEnabled:
             sectionLayoutEnabled ?? this.sectionLayoutEnabled,
         ownerId: ownerId,
@@ -113,6 +119,7 @@ class Template {
         if (connectedEntity != null) 'connectedEntity': connectedEntity,
         if (thumbnailUrl != null) 'thumbnailUrl': thumbnailUrl,
         if (printerName != null) 'printerName': printerName,
+        if (printerId != null) 'printerId': printerId,
         'sectionLayoutEnabled': sectionLayoutEnabled,
         'ownerId': ownerId,
         'createdDate': createdDate.toIso8601String(),
@@ -131,6 +138,7 @@ class Template {
         connectedEntity: j['connectedEntity'] as String?,
         thumbnailUrl: j['thumbnailUrl'] as String?,
         printerName: j['printerName'] as String?,
+        printerId: j['printerId'] as String?,
         sectionLayoutEnabled: j['sectionLayoutEnabled'] as bool? ?? false,
         ownerId: j['ownerId'] as String? ?? '',
         createdDate: DateTime.parse(j['createdDate'] as String),

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/element_model.dart';
 import '../models/template_model.dart';
-import '../services/template_service.dart';
+import '../services/papercraft_storage.dart';
 import '../state/editor_state.dart';
 import '../theme/app_colors.dart';
 import 'editor/canvas_workspace.dart';
@@ -14,7 +14,6 @@ import 'editor/toolbar.dart';
 import 'editor/viewport_nav.dart';
 import 'modals/preview_modal.dart';
 import 'modals/print_preview_modal.dart';
-import '../services/papercraft_storage.dart';
 import 'papercraft_controller.dart';
 import 'papercraft_data_source.dart';
 import 'papercraft_renderer.dart';
@@ -137,22 +136,17 @@ class _PapercraftEditorState extends State<PapercraftEditor> {
   @override
   void initState() {
     super.initState();
-    _state = EditorState();
+    _state = EditorState(storage: widget.storage ?? StorageRegistry.active);
+    _state.onSaved = (t) => widget.onSave?.call(t);
     _load();
   }
 
   PapercraftStorage get _storage => widget.storage ?? StorageRegistry.active;
 
   Future<void> _load() async {
-    // Use the provided storage to load; fall back to EditorState.load which
-    // uses TemplateService (SharedPrefs) if no custom storage given.
-    if (widget.storage != null) {
-      final template = await _storage.getById(widget.templateId);
-      if (template != null) {
-        _state.loadFromTemplate(template);
-      }
-    } else {
-      await _state.load(widget.templateId);
+    final template = await _storage.getById(widget.templateId);
+    if (template != null) {
+      _state.loadFromTemplate(template);
     }
     if (!mounted) return;
 
@@ -185,6 +179,10 @@ class _PapercraftEditorState extends State<PapercraftEditor> {
   @override
   void didUpdateWidget(PapercraftEditor old) {
     super.didUpdateWidget(old);
+    _state.onSaved = (t) => widget.onSave?.call(t);
+    if (widget.storage != old.storage) {
+      _state.setStorage(widget.storage ?? StorageRegistry.active);
+    }
     // Re-inject if the caller swaps the record (e.g. user picks a different
     // work order while the editor is still mounted).
     final ds = widget.dataSource;
@@ -327,15 +325,18 @@ class _PapercraftEditorState extends State<PapercraftEditor> {
       builder: (_) => PrintPreviewModal(
         template: template,
         elements: elements,
-        onPrinterSelected: (printerName) async {
+        onPrinterSelected: (printer) async {
           final updated = template.copyWith(
-            printerName: printerName,
-            clearPrinter: printerName == null,
+            printerName: printer?.name,
+            printerId: printer?.id,
+            clearPrinter: printer == null,
           );
-          await TemplateService.update(updated);
-          _state.updateTemplate(updated);
-          widget.onSave?.call(updated);
-          widget.onPrint?.call(updated, record);
+          final saved = await _storage.save(updated);
+          _state.updateTemplate(saved);
+          widget.onSave?.call(saved);
+        },
+        onPrinted: (printedTemplate) {
+          widget.onPrint?.call(printedTemplate, record);
         },
       ),
     );

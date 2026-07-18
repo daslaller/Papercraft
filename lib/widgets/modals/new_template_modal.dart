@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 import '../../models/template_model.dart';
 import '../../services/auth_service.dart';
-import '../../services/template_service.dart';
+import '../../services/papercraft_storage.dart';
+import '../../services/printer_provider.dart';
 import '../../theme/app_colors.dart';
 
 class NewTemplateModal extends StatefulWidget {
@@ -24,9 +24,9 @@ class _NewTemplateModalState extends State<NewTemplateModal> {
   bool _creating = false;
 
   // Printer flow
-  List<Printer> _printers = [];
+  List<PapercraftPrinter> _printers = [];
   bool _loadingPrinters = false;
-  Printer? _selectedPrinter;
+  PapercraftPrinter? _selectedPrinter;
 
   List<CanvasSize> get _filteredSizes {
     if (_docType == 'printer') {
@@ -44,7 +44,7 @@ class _NewTemplateModalState extends State<NewTemplateModal> {
   Future<void> _loadPrinters() async {
     setState(() => _loadingPrinters = true);
     try {
-      final list = await Printing.listPrinters();
+      final list = await PrinterRegistry.active.listPrinters();
       if (mounted) setState(() => _printers = list);
     } catch (_) {
       if (mounted) setState(() => _printers = []);
@@ -72,7 +72,7 @@ class _NewTemplateModalState extends State<NewTemplateModal> {
 
     final resolvedDocType = _docType == 'printer' ? 'document' : _docType;
 
-    final template = await TemplateService.create(
+    final template = await StorageRegistry.active.create(
       name: _nameCtrl.text.trim(),
       docType: resolvedDocType,
       canvasSize: _sizeKey,
@@ -80,6 +80,7 @@ class _NewTemplateModalState extends State<NewTemplateModal> {
       heightMm: hMm,
       ownerId: user.id,
       printerName: _docType == 'printer' ? _selectedPrinter?.name : null,
+      printerId: _docType == 'printer' ? _selectedPrinter?.id : null,
     );
     if (!mounted) return;
     Navigator.of(context).pop(template);
@@ -372,7 +373,7 @@ class _NewTemplateModalState extends State<NewTemplateModal> {
                                     height: 14,
                                     child: CircularProgressIndicator(
                                         strokeWidth: 2,
-                                        color: Colors.white))
+                                        color: AppColors.accentForeground))
                                 : const Text('Create Template',
                                     style:
                                         TextStyle(fontWeight: FontWeight.w600)),
@@ -412,11 +413,10 @@ class _NewTemplateModalState extends State<NewTemplateModal> {
     }
     return Column(
       children: _printers.map((p) {
-        final selected = _selectedPrinter?.name == p.name;
+        final selected = _selectedPrinter?.id == p.id;
         return GestureDetector(
           onTap: () => setState(() {
             _selectedPrinter = p;
-            // Auto-select A4 for default size; user can change below
             _sizeKey = 'A4';
           }),
           child: Container(
@@ -432,7 +432,7 @@ class _NewTemplateModalState extends State<NewTemplateModal> {
             ),
             child: Row(children: [
               Icon(
-                p.isDefault ? Icons.print : Icons.print_outlined,
+                p.isLocal ? Icons.print_outlined : Icons.cloud_outlined,
                 size: 16,
                 color: selected ? AppColors.accent : AppColors.mutedForeground,
               ),
@@ -449,14 +449,16 @@ class _NewTemplateModalState extends State<NewTemplateModal> {
                         color: selected ? AppColors.accent : AppColors.foreground,
                       ),
                     ),
-                    if (p.isDefault)
-                      const Text('Default printer',
-                          style: TextStyle(fontSize: 10, color: AppColors.mutedForeground)),
+                    Text(
+                      p.isLocal ? 'Local printer' : 'External printer',
+                      style: const TextStyle(
+                          fontSize: 10, color: AppColors.mutedForeground),
+                    ),
                   ],
                 ),
               ),
               if (selected)
-                Icon(Icons.check_circle, size: 16, color: AppColors.accent),
+                const Icon(Icons.check_circle, size: 16, color: AppColors.accent),
             ]),
           ),
         );

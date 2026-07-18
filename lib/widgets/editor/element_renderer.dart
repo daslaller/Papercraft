@@ -245,9 +245,9 @@ class ElementRenderer extends StatelessWidget {
           margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
           padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
           decoration: BoxDecoration(
-            color: const Color(0x140A66D6), // accent 8%
+            color: withAlpha(AppColors.accent, 0.08),
             borderRadius: BorderRadius.circular(4),
-            border: Border.all(color: const Color(0x400A66D6), width: 1),
+            border: Border.all(color: withAlpha(AppColors.accent, 0.25), width: 1),
           ),
           child: Text(
             '{{${match.group(1)}}}',
@@ -294,7 +294,7 @@ class ElementRenderer extends StatelessWidget {
             color: hexToFlutter(e.stroke), width: e.strokeWidth),
         borderRadius: isCircle
             ? BorderRadius.circular(10000)
-            : BorderRadius.circular(e.borderRadius),
+            : e.corners.toBorderRadius(),
         boxShadow: parseBoxShadow(e.boxShadow),
       );
     }
@@ -310,23 +310,24 @@ class ElementRenderer extends StatelessWidget {
   }
 
   Widget _renderImage(ImageElement e) {
+    final radius = e.corners.toBorderRadius();
     if (e.src.isEmpty) {
       return SizedBox(
         width: e.width ?? 150,
         height: e.height ?? 100,
         child: Container(
           decoration: BoxDecoration(
-            color: const Color(0xFFF0EFed),
+            color: AppColors.secondary,
             border: Border.all(
-                color: const Color(0xFFC4A882), width: 1.5,
+                color: AppColors.border, width: 1.5,
                 style: BorderStyle.solid),
-            borderRadius: BorderRadius.circular(e.borderRadius),
+            borderRadius: radius,
           ),
           child: const Center(
             child: Text('Image',
                 style: TextStyle(
                     fontSize: 12,
-                    color: Color(0xFF9E9890))),
+                    color: AppColors.mutedForeground)),
           ),
         ),
       );
@@ -337,11 +338,11 @@ class ElementRenderer extends StatelessWidget {
       child: Opacity(
         opacity: e.opacity,
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(e.borderRadius),
+          borderRadius: radius,
           child: Image.network(e.src,
               fit: _boxFit(e.objectFit), errorBuilder: (_, __, ___) =>
-                Container(color: const Color(0xFFF0EFed),
-                  child: const Icon(Icons.broken_image, color: Color(0xFF9E9890)))),
+                Container(color: AppColors.secondary,
+                  child: const Icon(Icons.broken_image, color: AppColors.mutedForeground))),
         ),
       ),
     );
@@ -368,8 +369,8 @@ class ElementRenderer extends StatelessWidget {
         child: Image.network(url,
             fit: BoxFit.contain,
             errorBuilder: (_, __, ___) =>
-              Container(color: const Color(0xFFF5F5F5),
-                child: const Icon(Icons.qr_code, color: Colors.grey))),
+              Container(color: AppColors.secondary,
+                child: const Icon(Icons.qr_code, color: AppColors.mutedForeground))),
       ),
     );
   }
@@ -404,7 +405,7 @@ class ElementRenderer extends StatelessWidget {
               ? Colors.transparent
               : hexToFlutter(e.background))
           : null,
-      borderRadius: BorderRadius.circular(e.borderRadius),
+      borderRadius: e.corners.toBorderRadius(),
       boxShadow: parseBoxShadow(e.boxShadow),
     );
 
@@ -496,10 +497,12 @@ class ElementRenderer extends StatelessWidget {
   }
 
   Widget _emptySlot() => Container(
-        color: const Color(0x08000000),
-        child: const Center(
+        color: withAlpha(AppColors.foreground, 0.03),
+        child: Center(
           child: Text('Empty',
-              style: TextStyle(fontSize: 10, color: Color(0x38000000))),
+              style: TextStyle(
+                  fontSize: 10,
+                  color: withAlpha(AppColors.foreground, 0.22))),
         ),
       );
 
