@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../../models/template_model.dart';
-import '../../services/auth_service.dart';
 import '../../services/papercraft_storage.dart';
 import '../../services/printer_provider.dart';
 import '../../theme/app_colors.dart';
 
 class NewTemplateModal extends StatefulWidget {
-  const NewTemplateModal({super.key});
+  const NewTemplateModal({super.key, required this.ownerId});
+
+  /// Owner id stamped on created templates (host app's user/tenant id).
+  final String ownerId;
 
   @override
   State<NewTemplateModal> createState() => _NewTemplateModalState();
@@ -57,8 +58,6 @@ class _NewTemplateModalState extends State<NewTemplateModal> {
     if (_nameCtrl.text.trim().isEmpty) return;
     if (_docType == 'printer' && _selectedPrinter == null) return;
     setState(() => _creating = true);
-    final user = context.read<AuthService>().user;
-    if (user == null) return;
 
     double wMm, hMm;
     if (_sizeKey == 'custom') {
@@ -78,7 +77,7 @@ class _NewTemplateModalState extends State<NewTemplateModal> {
       canvasSize: _sizeKey,
       widthMm: wMm,
       heightMm: hMm,
-      ownerId: user.id,
+      ownerId: widget.ownerId,
       printerName: _docType == 'printer' ? _selectedPrinter?.name : null,
       printerId: _docType == 'printer' ? _selectedPrinter?.id : null,
     );

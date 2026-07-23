@@ -3,7 +3,7 @@
 Single import covers everything:
 
 ```dart
-import 'package:base44_flutter_label_creator/papercraft.dart';
+import 'package:papercraft/papercraft.dart';
 ```
 
 Papercraft is designed to be the template source for host apps (e.g. RepairX): design in the embeddable editor, persist via a storage adapter, associate local or external printers, and print/render **without** mounting the editor.
@@ -17,8 +17,8 @@ Papercraft is designed to be the template source for host apps (e.g. RepairX): d
 ```yaml
 # your_app/pubspec.yaml
 dependencies:
-  base44_flutter_label_creator:
-    path: ../base44_flutter_label_creator
+  papercraft:
+    path: ../papercraft
 ```
 
 ### 2. Register adapters at startup (recommended)
@@ -147,6 +147,42 @@ PapercraftEditor(
 | `PapercraftMode.printReady` | Editor loads then immediately opens print dialog |
 
 ---
+
+## DashboardScreen (embeddable template list)
+
+The template dashboard — the "pick a template to edit" grid — is an embeddable
+widget too. It renders/creates/deletes/duplicates templates via
+`StorageRegistry.active` (your storage adapter) and hands editing back to you via
+`onOpen`. No router or auth dependency — the host owns navigation and identity.
+
+```dart
+DashboardScreen(
+  ownerId: currentUserOrTenantId,          // whose templates to list/create
+  onOpen: (templateId) => Navigator.push(  // host pushes the editor
+    context,
+    MaterialPageRoute(builder: (_) => Scaffold(
+      body: PapercraftEditor(templateId: templateId, onClose: () => Navigator.pop(context)),
+    )),
+  ),
+  onExit: () => Navigator.pop(context),     // optional; hides the navbar's close button when null
+  appName: 'RepairX',                        // navbar brand (default 'Papercraft')
+  logo: const MyBrandMark(),                 // optional brand logo widget
+  showChrome: true,                          // false embeds the grid without the navbar
+)
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `ownerId` | `String` | required | Owner id passed to storage `list`/`create`/`duplicate` |
+| `onOpen` | `void Function(String templateId)` | required | Open a template — host pushes the editor |
+| `onExit` | `VoidCallback?` | null | Navbar close/back action; hidden when null |
+| `showChrome` | `bool` | true | Show the top navbar (brand + New Template) |
+| `appName` | `String` | `'Papercraft'` | Brand name in the navbar |
+| `logo` | `Widget?` | null | Brand logo shown before `appName` |
+
+Theming: the dashboard (and the whole library) paints from `AppColors`. Host apps
+that vendor Papercraft reskin by swapping `theme/app_colors.dart` for their own
+palette; the rest of the library syncs from upstream unchanged.
 
 ## Template storage adapter
 

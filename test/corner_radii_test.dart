@@ -1,4 +1,4 @@
-import 'package:base44_flutter_label_creator/models/element_model.dart';
+import 'package:papercraft/models/element_model.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
 

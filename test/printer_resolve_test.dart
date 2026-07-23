@@ -1,5 +1,5 @@
-import 'package:base44_flutter_label_creator/models/template_model.dart';
-import 'package:base44_flutter_label_creator/services/printer_provider.dart';
+import 'package:papercraft/models/template_model.dart';
+import 'package:papercraft/services/printer_provider.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
