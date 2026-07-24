@@ -378,7 +378,7 @@ class _PreviewToggleState extends State<_PreviewToggle> {
                   ? AppColors.accent
                   : (_hovered ? AppColors.hairlineSoft : Colors.transparent),
               borderRadius: BorderRadius.circular(8),
-              border: active ? null : Border.all(color: const AppColors.hairline),
+              border: active ? null : Border.all(color: AppColors.hairline),
             ),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               Icon(
@@ -441,7 +441,7 @@ class _OutlineButtonState extends State<_OutlineButton> {
             decoration: BoxDecoration(
               color: _hovered ? AppColors.hairlineSoft : Colors.transparent,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const AppColors.hairline),
+              border: Border.all(color: AppColors.hairline),
             ),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               Icon(widget.icon,
