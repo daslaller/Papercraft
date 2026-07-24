@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'screens/dashboard_screen.dart';
-import 'screens/editor_screen.dart';
+import 'package:papercraft/papercraft.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'services/auth_service.dart';
-import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -42,7 +40,11 @@ class PapercraftApp extends StatelessWidget {
       routes: [
         GoRoute(
           path: '/',
-          builder: (_, __) => const DashboardScreen(),
+          builder: (ctx, __) => DashboardScreen(
+            ownerId: auth.user?.id ?? '',
+            onOpen: (id) => ctx.go('/editor/$id'),
+            onExit: () => auth.logout(),
+          ),
         ),
         GoRoute(
           path: '/login',

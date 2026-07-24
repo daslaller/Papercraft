@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
 import '../models/template_model.dart';
-import '../services/auth_service.dart';
 import '../services/papercraft_storage.dart';
 import '../theme/app_colors.dart';
 import '../widgets/modals/new_template_modal.dart';
@@ -17,7 +14,33 @@ String _timeAgo(DateTime dt) {
 }
 
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
+  const DashboardScreen({
+    super.key,
+    required this.ownerId,
+    required this.onOpen,
+    this.onExit,
+    this.showChrome = true,
+    this.appName = 'Papercraft',
+    this.logo,
+  });
+
+  /// Owner id whose templates are listed/created (host user/tenant id).
+  final String ownerId;
+
+  /// Opens a template for editing — the host pushes the editor.
+  final void Function(String templateId) onOpen;
+
+  /// Optional exit/back action; the navbar trailing button hides when null.
+  final VoidCallback? onExit;
+
+  /// Show the top navbar (brand + actions). False embeds the grid bare.
+  final bool showChrome;
+
+  /// Brand name shown in the navbar.
+  final String appName;
+
+  /// Optional brand logo shown before [appName].
+  final Widget? logo;
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -37,11 +60,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _load() async {
-    final user = context.read<AuthService>().user;
-    if (user == null) return;
     final storage = StorageRegistry.active;
-    await storage.seedDefaults(user.id);
-    final templates = await storage.list(ownerId: user.id);
+    await storage.seedDefaults(widget.ownerId);
+    final templates = await storage.list(ownerId: widget.ownerId);
     if (!mounted) return;
     setState(() { _templates = templates; _loading = false; });
   }
@@ -59,21 +80,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _createTemplate() async {
     final result = await showDialog<Template>(
       context: context,
-      builder: (_) => const NewTemplateModal(),
+      builder: (_) => NewTemplateModal(ownerId: widget.ownerId),
     );
     if (result != null) {
       if (!mounted) return;
-      context.go('/editor/${result.id}');
+      widget.onOpen(result.id);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final user = context.watch<AuthService>().user;
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Column(children: [
-        _buildNavbar(user),
+        if (widget.showChrome) _buildNavbar(),
         Expanded(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
@@ -98,7 +118,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildNavbar(AppUser? user) {
+  Widget _buildNavbar() {
     return Container(
       height: 64,
       decoration: BoxDecoration(
@@ -107,26 +127,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Row(children: [
-        Container(
-          width: 32,
-          height: 32,
-          decoration: BoxDecoration(
-              color: AppColors.primary, borderRadius: BorderRadius.circular(8)),
-          child: const Icon(Icons.description,
-              size: 16, color: AppColors.primaryForeground),
-        ),
+        widget.logo ??
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(8)),
+              child: const Icon(Icons.description,
+                  size: 16, color: AppColors.primaryForeground),
+            ),
         const SizedBox(width: 12),
-        Text('Papercraft',
+        Text(widget.appName,
             style: GoogleFonts.playfairDisplay(
                 fontSize: 20,
                 fontWeight: FontWeight.w600,
                 color: AppColors.foreground)),
         const Spacer(),
-        if (user != null)
-          Text(user.email,
-              style: const TextStyle(
-                  fontSize: 14, color: AppColors.mutedForeground)),
-        const SizedBox(width: 12),
         _AccentButton(
           onTap: _createTemplate,
           child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -139,15 +156,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     fontSize: 14)),
           ]),
         ),
-        const SizedBox(width: 8),
-        IconButton(
-          onPressed: () async {
-            await context.read<AuthService>().logout();
-            if (mounted) context.go('/login');
-          },
-          icon: const Icon(Icons.logout, size: 18, color: AppColors.mutedForeground),
-          tooltip: 'Sign out',
-        ),
+        if (widget.onExit != null) ...[
+          const SizedBox(width: 8),
+          IconButton(
+            onPressed: widget.onExit,
+            icon: const Icon(Icons.close,
+                size: 18, color: AppColors.mutedForeground),
+            tooltip: 'Close',
+          ),
+        ],
       ]),
     );
   }
@@ -289,18 +306,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (i == items.length) return _NewTemplateCard(onTap: _createTemplate);
         return _TemplateCard(
           template: items[i],
-          onOpen: () => context.go('/editor/${items[i].id}'),
+          onOpen: () => widget.onOpen(items[i].id),
           onDelete: () async {
             await StorageRegistry.active.delete(items[i].id);
             _load();
           },
           onDuplicate: () async {
-            final user = context.read<AuthService>().user;
-            if (user == null) return;
-            final copy =
-                await StorageRegistry.active.duplicate(items[i], user.id);
+            final copy = await StorageRegistry.active
+                .duplicate(items[i], widget.ownerId);
             if (!mounted) return;
-            context.go('/editor/${copy.id}');
+            widget.onOpen(copy.id);
           },
           onRename: (name) async {
             await StorageRegistry.active.save(items[i].copyWith(name: name));

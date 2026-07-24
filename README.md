@@ -7,12 +7,12 @@ Flutter label and document template designer — embeddable as a package for hos
 ```yaml
 # your_app/pubspec.yaml
 dependencies:
-  base44_flutter_label_creator:
-    path: ../base44_flutter_label_creator
+  papercraft:
+    path: ../papercraft
 ```
 
 ```dart
-import 'package:base44_flutter_label_creator/papercraft.dart';
+import 'package:papercraft/papercraft.dart';
 
 void main() {
   // Optional: persist templates in your backend

@@ -7,12 +7,12 @@
 /// 1. Add to your app's pubspec.yaml:
 ///
 ///      dependencies:
-///        base44_flutter_label_creator:
-///          path: ../base44_flutter_label_creator
+///        papercraft:
+///          path: ../papercraft
 ///
 /// 2. Import the single barrel:
 ///
-///      import 'package:base44_flutter_label_creator/papercraft.dart';
+///      import 'package:papercraft/papercraft.dart';
 ///
 /// 3. Register adapters once at startup (optional but recommended for RepairX):
 ///

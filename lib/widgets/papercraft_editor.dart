@@ -26,7 +26,7 @@ export 'papercraft_controller.dart';
 /// No dependency on GoRouter or any particular navigation setup.
 ///
 /// ```dart
-/// import 'package:base44_flutter_label_creator/papercraft.dart';
+/// import 'package:papercraft/papercraft.dart';
 ///
 /// // Minimal — full editor, no data injection:
 /// PapercraftEditor(

@@ -9,11 +9,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'screens/dashboard_screen.dart';
-import 'screens/editor_screen.dart';
+import 'package:papercraft/papercraft.dart';
 import 'services/auth_service.dart';
-import 'services/papercraft_storage.dart';
-import 'theme/app_theme.dart';
 
 const _kDevUserId = 'dev-user-local';
 const _kDevEmail = 'dev@local.dev';
@@ -63,7 +60,13 @@ class _DevApp extends StatelessWidget {
     final router = GoRouter(
       initialLocation: '/',
       routes: [
-        GoRoute(path: '/', builder: (_, __) => const DashboardScreen()),
+        GoRoute(
+          path: '/',
+          builder: (ctx, __) => DashboardScreen(
+            ownerId: _kDevUserId,
+            onOpen: (id) => ctx.go('/editor/$id'),
+          ),
+        ),
         GoRoute(
           path: '/editor/:id',
           builder: (ctx, state) => EditorScreen(
