@@ -168,6 +168,7 @@ DashboardScreen(
   appName: 'RepairX',                        // navbar brand (default 'Papercraft')
   logo: const MyBrandMark(),                 // optional brand logo widget
   showChrome: true,                          // false embeds the grid without the navbar
+  embedded: false,                           // true = bare picker for a host settings page
 )
 ```
 
@@ -177,6 +178,7 @@ DashboardScreen(
 | `onOpen` | `void Function(String templateId)` | required | Open a template — host pushes the editor |
 | `onExit` | `VoidCallback?` | null | Navbar close/back action; hidden when null |
 | `showChrome` | `bool` | true | Show the top navbar (brand + New Template) |
+| `embedded` | `bool` | false | Bare picker: no Scaffold/navbar/hero and no internal scrolling — the filter bar + grid shrink-wrap so the host scroll view owns scrolling. Grid columns follow the width the host grants. Ignores `showChrome`/`onExit`/`appName`/`logo` |
 | `appName` | `String` | `'Papercraft'` | Brand name in the navbar |
 | `logo` | `Widget?` | null | Brand logo shown before `appName` |
 
