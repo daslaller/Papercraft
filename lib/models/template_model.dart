@@ -43,9 +43,18 @@ class Template {
   final String? printerName;
   /// Stable printer id from [PapercraftPrinter.id] when associated.
   final String? printerId;
+  /// Optional LOCAL fallback printer, used when the primary associated printer
+  /// (e.g. a cloud/PrintNode printer) can't be resolved at print time — so a
+  /// template still prints on the desk printer when the network printer is off.
+  final String? fallbackPrinterName;
+  final String? fallbackPrinterId;
   /// When true, new row/col containers are flow sections at the top of the page.
   /// When false, row/col are freely positioned on the canvas.
   final bool sectionLayoutEnabled;
+  /// Explicit per-doc-type default. The host app's storage sets this for the
+  /// one template per [docType] that should be picked when printing.
+  /// False for all templates means fall back to "most recently updated".
+  final bool isDefault;
   final String ownerId;
   final DateTime createdDate;
   final DateTime updatedDate;
@@ -63,7 +72,10 @@ class Template {
     this.thumbnailUrl,
     this.printerName,
     this.printerId,
+    this.fallbackPrinterName,
+    this.fallbackPrinterId,
     this.sectionLayoutEnabled = false,
+    this.isDefault = false,
     required this.ownerId,
     required this.createdDate,
     required this.updatedDate,
@@ -83,7 +95,11 @@ class Template {
     String? printerName,
     String? printerId,
     bool clearPrinter = false,
+    String? fallbackPrinterName,
+    String? fallbackPrinterId,
+    bool clearFallbackPrinter = false,
     bool? sectionLayoutEnabled,
+    bool? isDefault,
     DateTime? updatedDate,
   }) =>
       Template(
@@ -100,8 +116,15 @@ class Template {
         thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
         printerName: clearPrinter ? null : (printerName ?? this.printerName),
         printerId: clearPrinter ? null : (printerId ?? this.printerId),
+        fallbackPrinterName: clearFallbackPrinter
+            ? null
+            : (fallbackPrinterName ?? this.fallbackPrinterName),
+        fallbackPrinterId: clearFallbackPrinter
+            ? null
+            : (fallbackPrinterId ?? this.fallbackPrinterId),
         sectionLayoutEnabled:
             sectionLayoutEnabled ?? this.sectionLayoutEnabled,
+        isDefault: isDefault ?? this.isDefault,
         ownerId: ownerId,
         createdDate: createdDate,
         updatedDate: updatedDate ?? this.updatedDate,
@@ -120,7 +143,11 @@ class Template {
         if (thumbnailUrl != null) 'thumbnailUrl': thumbnailUrl,
         if (printerName != null) 'printerName': printerName,
         if (printerId != null) 'printerId': printerId,
+        if (fallbackPrinterName != null)
+          'fallbackPrinterName': fallbackPrinterName,
+        if (fallbackPrinterId != null) 'fallbackPrinterId': fallbackPrinterId,
         'sectionLayoutEnabled': sectionLayoutEnabled,
+        'isDefault': isDefault,
         'ownerId': ownerId,
         'createdDate': createdDate.toIso8601String(),
         'updatedDate': updatedDate.toIso8601String(),
@@ -139,7 +166,10 @@ class Template {
         thumbnailUrl: j['thumbnailUrl'] as String?,
         printerName: j['printerName'] as String?,
         printerId: j['printerId'] as String?,
+        fallbackPrinterName: j['fallbackPrinterName'] as String?,
+        fallbackPrinterId: j['fallbackPrinterId'] as String?,
         sectionLayoutEnabled: j['sectionLayoutEnabled'] as bool? ?? false,
+        isDefault: j['isDefault'] as bool? ?? false,
         ownerId: j['ownerId'] as String? ?? '',
         createdDate: DateTime.parse(j['createdDate'] as String),
         updatedDate: DateTime.parse(j['updatedDate'] as String),

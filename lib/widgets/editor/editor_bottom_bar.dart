@@ -65,6 +65,22 @@ class _EditorBottomBarState extends State<EditorBottomBar> {
           onChanged: (printer) => _savePrinter(context, state, template, printer),
         ),
 
+        const SizedBox(width: 12),
+        // Local fallback printer — used when the primary (e.g. a PrintNode
+        // cloud printer) is offline. Only local/OS printers are offered here.
+        Icon(Icons.print_disabled_outlined,
+            size: 13, color: AppColors.mutedForeground),
+        const SizedBox(width: 6),
+        _PrinterDropdown(
+          printers: _printers.where((p) => p.isLocal).toList(),
+          loading: _loadingPrinters,
+          selectedId: template.fallbackPrinterId,
+          selectedName: template.fallbackPrinterName,
+          emptyLabel: 'No fallback',
+          onChanged: (printer) =>
+              _saveFallbackPrinter(context, state, template, printer),
+        ),
+
         const Spacer(),
 
         // Canvas / paper size selector
@@ -89,6 +105,21 @@ class _EditorBottomBarState extends State<EditorBottomBar> {
       printerName: printer?.name,
       printerId: printer?.id,
       clearPrinter: printer == null,
+    );
+    final saved = await state.storage.save(updated);
+    state.updateTemplate(saved);
+    state.onSaved?.call(saved);
+  }
+
+  Future<void> _saveFallbackPrinter(
+      BuildContext context,
+      EditorState state,
+      Template template,
+      PapercraftPrinter? printer) async {
+    final updated = template.copyWith(
+      fallbackPrinterName: printer?.name,
+      fallbackPrinterId: printer?.id,
+      clearFallbackPrinter: printer == null,
     );
     final saved = await state.storage.save(updated);
     state.updateTemplate(saved);
@@ -219,17 +250,22 @@ class _PrinterDropdown extends StatelessWidget {
   final String? selectedName;
   final void Function(PapercraftPrinter?) onChanged;
 
+  /// Label shown when nothing is selected (e.g. 'None (dialog on print)' for the
+  /// primary printer, 'No fallback' for the fallback picker).
+  final String emptyLabel;
+
   const _PrinterDropdown({
     required this.printers,
     required this.loading,
     required this.selectedId,
     required this.selectedName,
     required this.onChanged,
+    this.emptyLabel = 'None (dialog on print)',
   });
 
   String get _currentLabel {
     if (selectedId == null && selectedName == null) {
-      return 'None (dialog on print)';
+      return emptyLabel;
     }
     final match = printers.where((p) =>
         (selectedId != null && p.id == selectedId) ||
@@ -271,11 +307,10 @@ class _PrinterDropdown extends StatelessWidget {
     final offset = box.localToGlobal(Offset.zero);
 
     final items = <PopupMenuEntry<String>>[
-      const PopupMenuItem<String>(
+      PopupMenuItem<String>(
         value: _noneValue,
         height: 32,
-        child: Text('None — open dialog on print',
-            style: TextStyle(fontSize: 11)),
+        child: Text(emptyLabel, style: const TextStyle(fontSize: 11)),
       ),
       ...printers.map((p) => PopupMenuItem<String>(
             value: p.id,

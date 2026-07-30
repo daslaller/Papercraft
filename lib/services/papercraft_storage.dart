@@ -67,6 +67,11 @@ abstract class PapercraftStorage {
   /// Seed demo templates for [ownerId] if the store is empty.
   /// Default no-op — override for local/dev storages.
   Future<void> seedDefaults(String ownerId) async {}
+
+  /// Mark [templateId] as the explicit default for its [docType], clearing the
+  /// flag on any other template of the same type. Default no-op — override in
+  /// storage backends that persist the flag (e.g. Appwrite-backed storage).
+  Future<void> setDefault(String templateId, String docType) async {}
 }
 
 // ── Default on-device implementation ─────────────────────────────────────────
@@ -118,6 +123,13 @@ class SharedPrefsStorage implements PapercraftStorage {
   @override
   Future<void> seedDefaults(String ownerId) =>
       TemplateService.seedDefaults(ownerId);
+
+  @override
+  Future<void> setDefault(String templateId, String docType) async {
+    // SharedPreferences storage does not persist the is_default flag — it
+    // stores templates via TemplateService which has no default-selection
+    // concept. No-op here; the Appwrite-backed storage overrides this properly.
+  }
 }
 
 // ── Registry ──────────────────────────────────────────────────────────────────
