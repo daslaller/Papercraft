@@ -104,16 +104,35 @@ abstract class PrinterProvider {
   }
 
   /// Resolve against an already-fetched list.
+  ///
+  /// Prefers the primary association ([Template.printerId] then
+  /// [Template.printerName]); when that printer isn't in the list (e.g. a
+  /// cloud/PrintNode printer that's offline) it falls back to the template's
+  /// designated local fallback printer, so printing still succeeds on the desk
+  /// printer instead of failing.
   static PapercraftPrinter? resolveFromList(
     Template template,
     List<PapercraftPrinter> printers,
   ) {
-    if (template.printerId != null) {
-      final byId = printers.where((p) => p.id == template.printerId);
+    return _match(printers, template.printerId, template.printerName) ??
+        _match(
+          printers,
+          template.fallbackPrinterId,
+          template.fallbackPrinterName,
+        );
+  }
+
+  static PapercraftPrinter? _match(
+    List<PapercraftPrinter> printers,
+    String? id,
+    String? name,
+  ) {
+    if (id != null) {
+      final byId = printers.where((p) => p.id == id);
       if (byId.isNotEmpty) return byId.first;
     }
-    if (template.printerName != null) {
-      final byName = printers.where((p) => p.name == template.printerName);
+    if (name != null) {
+      final byName = printers.where((p) => p.name == name);
       if (byName.isNotEmpty) return byName.first;
     }
     return null;

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../models/element_model.dart';
 import '../models/template_model.dart';
 import '../services/papercraft_storage.dart';
 import '../theme/app_colors.dart';
 import '../widgets/modals/new_template_modal.dart';
+import '../widgets/papercraft_renderer.dart';
 
 String _timeAgo(DateTime dt) {
   final diff = DateTime.now().difference(dt).inSeconds;
@@ -321,6 +323,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
             await StorageRegistry.active.save(items[i].copyWith(name: name));
             _load();
           },
+          onSetDefault: () async {
+            await StorageRegistry.active
+                .setDefault(items[i].id, items[i].docType);
+            _load();
+          },
         );
       },
     );
@@ -342,6 +349,7 @@ class _TemplateCard extends StatefulWidget {
   final VoidCallback onDelete;
   final VoidCallback onDuplicate;
   final void Function(String) onRename;
+  final VoidCallback onSetDefault;
 
   const _TemplateCard({
     required this.template,
@@ -349,6 +357,7 @@ class _TemplateCard extends StatefulWidget {
     required this.onDelete,
     required this.onDuplicate,
     required this.onRename,
+    required this.onSetDefault,
   });
 
   @override
@@ -365,6 +374,52 @@ class _TemplateCardState extends State<_TemplateCard> {
   void dispose() {
     _renameCtrl.dispose();
     super.dispose();
+  }
+
+  /// Renders a live preview of the template's current layout using
+  /// [PapercraftRenderer], falling back to an icon placeholder for empty or
+  /// unparseable templates.
+  Widget _buildPreview() {
+    List<CanvasElement> elements = const [];
+    try {
+      elements = elementsFromJson(widget.template.elements);
+    } catch (_) {}
+
+    if (elements.isEmpty) {
+      return Container(
+        color: Colors.white,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              widget.template.docType == 'label'
+                  ? Icons.label
+                  : Icons.description,
+              size: 28,
+              color: AppColors.mutedForeground.withValues(alpha: 0.4),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '${widget.template.canvasWidthMm.toStringAsFixed(0)}'
+              '×${widget.template.canvasHeightMm.toStringAsFixed(0)} mm',
+              style: const TextStyle(
+                  fontSize: 10,
+                  color: AppColors.mutedForeground,
+                  fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      color: Colors.white,
+      child: PapercraftRenderer.fitted(
+        template: widget.template,
+        elements: elements,
+        maxScale: 0.5,
+      ),
+    );
   }
 
   @override
@@ -395,41 +450,11 @@ class _TemplateCardState extends State<_TemplateCard> {
                     borderRadius: const BorderRadius.vertical(
                         top: Radius.circular(16)),
                   ),
-                  padding: const EdgeInsets.all(16),
-                  child: widget.template.thumbnailUrl != null
-                      ? Image.network(
-                          widget.template.thumbnailUrl!,
-                          fit: BoxFit.contain,
-                        )
-                      : Center(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(8),
-                              boxShadow: AppColors.shadowMd,
-                            ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  widget.template.docType == 'label'
-                                      ? Icons.label
-                                      : Icons.description,
-                                  size: 28,
-                                  color: AppColors.mutedForeground.withValues(alpha: 0.4),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  '${widget.template.canvasWidthMm.toStringAsFixed(0)}×${widget.template.canvasHeightMm.toStringAsFixed(0)} mm',
-                                  style: const TextStyle(
-                                      fontSize: 10,
-                                      color: AppColors.mutedForeground,
-                                      fontWeight: FontWeight.w500),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
+                  padding: const EdgeInsets.all(12),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: _buildPreview(),
+                  ),
                 ),
                 // Type badge
                 Positioned(
@@ -457,6 +482,37 @@ class _TemplateCardState extends State<_TemplateCard> {
                     ),
                   ),
                 ),
+                // Default badge — shown when this template is the explicit default
+                if (widget.template.isDefault)
+                  Positioned(
+                    top: 12,
+                    right: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.accent,
+                        borderRadius: BorderRadius.circular(100),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.star_rounded,
+                              size: 8,
+                              color: AppColors.accentForeground),
+                          SizedBox(width: 3),
+                          Text(
+                            'Default',
+                            style: TextStyle(
+                              fontSize: 8,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.accentForeground,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
               ]),
             ),
             // Footer
@@ -529,6 +585,7 @@ class _TemplateCardState extends State<_TemplateCard> {
                 // Context menu
                 _CardMenu(
                   visible: _hovered || _menuOpen,
+                  isDefault: widget.template.isDefault,
                   onMenuChange: (open) =>
                       setState(() => _menuOpen = open),
                   onRename: () {
@@ -537,6 +594,7 @@ class _TemplateCardState extends State<_TemplateCard> {
                   },
                   onDuplicate: widget.onDuplicate,
                   onDelete: widget.onDelete,
+                  onSetDefault: widget.onSetDefault,
                 ),
               ]),
             ),
@@ -549,17 +607,21 @@ class _TemplateCardState extends State<_TemplateCard> {
 
 class _CardMenu extends StatefulWidget {
   final bool visible;
+  final bool isDefault;
   final void Function(bool) onMenuChange;
   final VoidCallback onRename;
   final VoidCallback onDuplicate;
   final VoidCallback onDelete;
+  final VoidCallback onSetDefault;
 
   const _CardMenu({
     required this.visible,
+    required this.isDefault,
     required this.onMenuChange,
     required this.onRename,
     required this.onDuplicate,
     required this.onDelete,
+    required this.onSetDefault,
   });
 
   @override
@@ -573,6 +635,27 @@ class _CardMenuState extends State<_CardMenu> {
       onOpen: () => widget.onMenuChange(true),
       onClose: () => widget.onMenuChange(false),
       menuChildren: [
+        MenuItemButton(
+          onPressed: widget.isDefault ? null : widget.onSetDefault,
+          leadingIcon: Icon(
+            widget.isDefault
+                ? Icons.star_rounded
+                : Icons.star_border_rounded,
+            size: 12,
+            color: widget.isDefault
+                ? AppColors.accent
+                : AppColors.mutedForeground,
+          ),
+          child: Text(
+            widget.isDefault ? 'Default (active)' : 'Set as default',
+            style: TextStyle(
+              fontSize: 12,
+              color: widget.isDefault
+                  ? AppColors.mutedForeground
+                  : null,
+            ),
+          ),
+        ),
         MenuItemButton(
           onPressed: widget.onDuplicate,
           leadingIcon: const Icon(Icons.copy, size: 12),

@@ -1,35 +1,44 @@
+// RepairX-OWNED FORK — Anchor palette. Do NOT overwrite on upstream sync
+// (see pubspec description). Upstream original:
+// daslaller/Papercraft lib/theme/app_colors.dart
+//
+// Values traced to RepairX's Anchor design system (design-system/tokens/
+// colors.css and lib/core/theme/app_theme.dart AppColorsData.light):
+// slate neutrals, blue-600 #2563EB interactive accent. Member names and
+// `static const`-ness are a compile contract with the rest of the library —
+// change VALUES only.
 import 'package:flutter/material.dart';
 
 class AppColors {
-  // ── Spec-aligned palette (§2) ────────────────────────────────────────────────
-  static const background   = Color(0xFFF5F5F7); // spec "bg"
-  static const panelBg      = Color(0xFFFBFBFD); // spec "panelBg" (sidebars, cards)
-  static const workspaceBg  = Color(0xFFF0F0F2); // spec "canvasBg"
-  static const card         = Color(0xFFFFFFFF); // spec "surface"
+  // ── Surfaces (Anchor slate scale) ────────────────────────────────────────────
+  static const background   = Color(0xFFF8FAFC); // slate-50 page bg
+  static const panelBg      = Color(0xFFFFFFFF); // white (sidebars, cards)
+  static const workspaceBg  = Color(0xFFF1F5F9); // slate-100 canvas bg
+  static const card         = Color(0xFFFFFFFF); // white surface
 
-  static const foreground        = Color(0xFF1D1D1F); // spec "ink"
-  static const foregroundSecond  = Color(0xFF515154); // spec "inkSecondary"
-  static const mutedForeground   = Color(0xFF86868B); // spec "inkTertiary"
-  static const mutedForeground2  = Color(0xFFA1A1A6); // spec "inkQuaternary"
-  static const cardForeground    = Color(0xFF1D1D1F);
+  static const foreground        = Color(0xFF0F172A); // slate-900
+  static const foregroundSecond  = Color(0xFF475569); // slate-600
+  static const mutedForeground   = Color(0xFF64748B); // slate-500
+  static const mutedForeground2  = Color(0xFF94A3B8); // slate-400
+  static const cardForeground    = Color(0xFF0F172A); // slate-900
 
-  static const primary            = Color(0xFF1D1D1F);
-  static const primaryForeground  = Color(0xFFFAFAFA);
+  static const primary            = Color(0xFF0F172A); // slate-900 dark-ink fills
+  static const primaryForeground  = Color(0xFFF8FAFC); // slate-50
 
-  static const secondary            = Color(0xFFEDEDF0); // spec "hover"/"segmentTrack"
-  static const secondaryForeground  = Color(0xFF1D1D1F);
-  static const muted                = Color(0xFFEDEDF0);
+  static const secondary            = Color(0xFFF1F5F9); // slate-100 hover/track
+  static const secondaryForeground  = Color(0xFF0F172A); // slate-900
+  static const muted                = Color(0xFFF1F5F9); // slate-100
 
-  // ── Accent (the one blue — §2) ──────────────────────────────────────────────
-  static const accent            = Color(0xFF0A66D6); // spec accent
+  // ── Accent (Anchor blue — the interactive/selected color) ────────────────────
+  static const accent            = Color(0xFF2563EB); // Anchor blue-600
   static const accentForeground  = Color(0xFFFFFFFF);
-  static const ring              = Color(0xFF0A66D6);
+  static const ring              = Color(0xFF2563EB); // Anchor blue-600
 
-  // ── Semantic ─────────────────────────────────────────────────────────────────
-  static const destructive        = Color(0xFFC0392B); // spec "danger"
+  // ── Semantic (RepairX AppColorsData.light) ───────────────────────────────────
+  static const destructive        = Color(0xFFEF4444); // RepairX error red-500
   static const destructiveFgnd   = Color(0xFFFFFFFF);
-  static const success            = Color(0xFF34C759); // spec "success"
-  static const warning            = Color(0xFFF59E0B);
+  static const success            = Color(0xFF16A34A); // RepairX green-600
+  static const warning            = Color(0xFFD97706); // RepairX amber-600
 
   // ── Glass / overlays (light theme only — dark mode deferred) ─────────────────
   static const glassBar           = Color(0xEEFFFFFF);
@@ -39,10 +48,10 @@ class AppColors {
   static const inkFaint           = Color(0x59000000);
 
   // ── Borders (hairlines — three prominence levels) ────────────────────────────
-  static const border  = Color(0xFFE0E0E4); // spec hairline dark
-  static const border2 = Color(0xFFECECED); // spec hairline mid
-  static const border3 = Color(0xFFF0F0F2); // spec hairline light
-  static const input   = Color(0xFFE0E0E4);
+  static const border  = Color(0xFFE2E8F0); // slate-200 (dark)
+  static const border2 = Color(0xFFEAEFF5); // slate-200/100 midpoint (mid)
+  static const border3 = Color(0xFFF1F5F9); // slate-100 (light)
+  static const input   = Color(0xFFE2E8F0); // slate-200
 
   // ── Shadows (§2) ─────────────────────────────────────────────────────────────
   static const shadowSm = [
