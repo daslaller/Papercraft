@@ -22,6 +22,7 @@ class DashboardScreen extends StatefulWidget {
     required this.onOpen,
     this.onExit,
     this.showChrome = true,
+    this.embedded = false,
     this.appName = 'Papercraft',
     this.logo,
   });
@@ -37,6 +38,12 @@ class DashboardScreen extends StatefulWidget {
 
   /// Show the top navbar (brand + actions). False embeds the grid bare.
   final bool showChrome;
+
+  /// Embed the picker inside a host layout: no Scaffold, navbar, or hero, and
+  /// no internal scrolling — the filter bar + template grid shrink-wrap so the
+  /// host's own scroll view owns scrolling. [showChrome]/[onExit]/[appName]/
+  /// [logo] are ignored in this mode.
+  final bool embedded;
 
   /// Brand name shown in the navbar.
   final String appName;
@@ -92,6 +99,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.embedded) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildFilterBar(),
+          const SizedBox(height: 24),
+          _buildGrid(),
+        ],
+      );
+    }
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Column(children: [
@@ -214,9 +231,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildGrid() {
+    // Columns follow the width actually granted to the grid (not the window),
+    // so the picker also lays out correctly when embedded in a narrow host
+    // column.
+    return LayoutBuilder(
+      builder: (context, constraints) => _buildGridContent(
+        _crossAxisCount(constraints.maxWidth),
+      ),
+    );
+  }
+
+  Widget _buildGridContent(int crossAxisCount) {
     if (_loading) {
       return GridView.count(
-        crossAxisCount: _crossAxisCount(),
+        crossAxisCount: crossAxisCount,
         crossAxisSpacing: 20,
         mainAxisSpacing: 20,
         childAspectRatio: 4 / 3,
@@ -298,7 +326,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: _crossAxisCount(),
+        crossAxisCount: crossAxisCount,
         crossAxisSpacing: 20,
         mainAxisSpacing: 20,
         childAspectRatio: 4 / 3,
@@ -333,8 +361,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  int _crossAxisCount() {
-    final w = MediaQuery.of(context).size.width;
+  int _crossAxisCount(double w) {
     if (w >= 1024) return 4;
     if (w >= 640) return 3;
     return 2;
