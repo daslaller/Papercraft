@@ -4,6 +4,7 @@ import '../../models/element_model.dart';
 import '../../services/token_service.dart';
 import '../../state/editor_state.dart';
 import '../../theme/app_colors.dart';
+import '../common/paper_chrome.dart';
 import 'sidebar_utils.dart';
 
 // ── Mock preview records ─────────────────────────────────────────────────────
@@ -323,7 +324,7 @@ class _LeftSidebarState extends State<LeftSidebar> {
     return Padding(
       padding: const EdgeInsets.all(12),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('DATA SOURCE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 0.05, color: AppColors.mutedForeground)),
+        const PaperFieldLabel('Data source'),
         const SizedBox(height: 8),
         TextField(
           controller: _entityCtrl,
@@ -366,7 +367,7 @@ class _LeftSidebarState extends State<LeftSidebar> {
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
           child: Row(children: [
-            const Text('FIELDS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 0.05, color: AppColors.mutedForeground)),
+            const PaperFieldLabel('Fields'),
             const SizedBox(width: 6),
             const Expanded(child: Text('Click to add to canvas', style: TextStyle(fontSize: 9, color: AppColors.mutedForeground))),
           ]),
@@ -401,7 +402,7 @@ class _LeftSidebarState extends State<LeftSidebar> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('PREVIEW RECORD', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 0.05, color: AppColors.mutedForeground)),
+        const PaperFieldLabel('Preview record'),
         const SizedBox(height: 8),
         ..._kMockRecords.asMap().entries.map((entry) {
           final idx = entry.key;
@@ -522,7 +523,7 @@ class _LeftSidebarState extends State<LeftSidebar> {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Row(children: [
-            const Text('COMPUTED FIELDS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 0.05, color: AppColors.mutedForeground)),
+            const PaperFieldLabel('Computed fields'),
             const Spacer(),
             Icon(_showComputed ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 14, color: AppColors.mutedForeground),
           ]),

@@ -4,6 +4,7 @@ import '../../models/element_model.dart';
 import '../../models/layout_helpers.dart';
 import '../../state/editor_state.dart';
 import '../../theme/app_colors.dart';
+import '../common/paper_chrome.dart';
 
 class LayersTree extends StatelessWidget {
   const LayersTree({super.key});
@@ -25,12 +26,7 @@ class LayersTree extends StatelessWidget {
               border: Border(bottom: BorderSide(color: AppColors.border))),
           child: const Align(
             alignment: Alignment.centerLeft,
-            child: Text('LAYERS',
-                style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.05,
-                    color: AppColors.mutedForeground)),
+            child: PaperFieldLabel('Layers'),
           ),
         ),
         Expanded(

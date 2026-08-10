@@ -1,9 +1,11 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../models/element_model.dart';
 import '../models/template_model.dart';
 import '../services/papercraft_storage.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_tokens.dart';
+import '../widgets/common/paper_chrome.dart';
 import '../widgets/modals/new_template_modal.dart';
 import '../widgets/papercraft_renderer.dart';
 
@@ -115,7 +117,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (widget.showChrome) _buildNavbar(),
         Expanded(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppTokens.space6, vertical: AppTokens.space6),
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 1280),
@@ -123,9 +126,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildHero(),
-                    const SizedBox(height: 40),
+                    const SizedBox(height: AppTokens.space6),
                     _buildFilterBar(),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: AppTokens.space5),
                     _buildGrid(),
                   ],
                 ),
@@ -138,83 +141,93 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildNavbar() {
-    return Container(
-      height: 64,
-      decoration: BoxDecoration(
-        color: AppColors.glassBar,
-        border: Border(bottom: BorderSide(color: AppColors.border)),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Row(children: [
-        widget.logo ??
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(8)),
-              child: const Icon(Icons.description,
-                  size: 16, color: AppColors.primaryForeground),
+    // Same translucent, hairline-bordered chrome as the editor toolbar —
+    // one bar treatment for the whole app rather than a heavier opaque one
+    // here and a denser glass one there.
+    return SizedBox(
+      height: 52,
+      child: ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: Container(
+            decoration: const BoxDecoration(
+              color: AppColors.glassBar,
+              border: Border(bottom: BorderSide(color: AppColors.border)),
             ),
-        const SizedBox(width: 12),
-        Text(widget.appName,
-            style: GoogleFonts.playfairDisplay(
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
-                color: AppColors.foreground)),
-        const Spacer(),
-        _AccentButton(
-          onTap: _createTemplate,
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.add, size: 16, color: AppColors.accentForeground),
-            const SizedBox(width: 6),
-            const Text('New Template',
-                style: TextStyle(
-                    color: AppColors.accentForeground,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14)),
-          ]),
-        ),
-        if (widget.onExit != null) ...[
-          const SizedBox(width: 8),
-          IconButton(
-            onPressed: widget.onExit,
-            icon: const Icon(Icons.close,
-                size: 18, color: AppColors.mutedForeground),
-            tooltip: 'Close',
+            padding: const EdgeInsets.symmetric(horizontal: AppTokens.space5),
+            child: Row(children: [
+              widget.logo ??
+                  Container(
+                    width: 26,
+                    height: 26,
+                    decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(AppTokens.radiusSm)),
+                    child: const Icon(Icons.description,
+                        size: 14, color: AppColors.primaryForeground),
+                  ),
+              const SizedBox(width: AppTokens.space2),
+              Text(widget.appName, style: AppType.pageTitle),
+              const Spacer(),
+              _AccentButton(
+                onTap: _createTemplate,
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.add, size: 14, color: AppColors.accentForeground),
+                  const SizedBox(width: 6),
+                  const Text('New Template',
+                      style: TextStyle(
+                          color: AppColors.accentForeground,
+                          fontWeight: FontWeight.w600,
+                          fontSize: AppType.sm)),
+                ]),
+              ),
+              if (widget.onExit != null) ...[
+                const SizedBox(width: AppTokens.space1),
+                IconButton(
+                  onPressed: widget.onExit,
+                  icon: const Icon(Icons.close,
+                      size: 16, color: AppColors.mutedForeground),
+                  tooltip: 'Close',
+                ),
+              ],
+            ]),
           ),
-        ],
-      ]),
+        ),
+      ),
     );
   }
 
   Widget _buildHero() {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('Your Templates',
-          style: GoogleFonts.playfairDisplay(
-              fontSize: 36, fontWeight: FontWeight.w600)),
-      const SizedBox(height: 8),
-      const Text('Design beautiful labels and documents connected to live data.',
-          style: TextStyle(fontSize: 16, color: AppColors.mutedForeground)),
+      const PaperSectionLabel('Templates'),
+      const SizedBox(height: AppTokens.space1),
+      Text('Your templates',
+          style: AppType.pageTitle.copyWith(
+              fontSize: AppType.display, color: AppColors.foreground)),
+      const SizedBox(height: AppTokens.space1),
+      const Text('Design labels and documents connected to live data.',
+          style: TextStyle(fontSize: AppType.sm, color: AppColors.mutedForeground)),
     ]);
   }
 
   Widget _buildFilterBar() {
-    return Wrap(spacing: 12, runSpacing: 8, children: [
+    return Wrap(spacing: AppTokens.space2, runSpacing: AppTokens.space2, children: [
       SizedBox(
-        width: 320,
+        width: 300,
         child: TextField(
           controller: _searchCtrl,
           onChanged: (v) => setState(() => _search = v),
+          style: const TextStyle(fontSize: AppType.sm),
           decoration: InputDecoration(
             hintText: 'Search templates…',
+            hintStyle: const TextStyle(fontSize: AppType.sm),
             prefixIcon: const Icon(Icons.search,
                 size: 16, color: AppColors.mutedForeground),
             border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppTokens.radiusMd),
                 borderSide: const BorderSide(color: AppColors.border)),
             contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                const EdgeInsets.symmetric(horizontal: AppTokens.space3, vertical: 9),
           ),
         ),
       ),
@@ -269,20 +282,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
           padding: const EdgeInsets.symmetric(vertical: 96),
           child: Column(children: [
             Container(
-              width: 80,
-              height: 80,
+              width: 64,
+              height: 64,
               decoration: BoxDecoration(
                   color: AppColors.secondary,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(AppTokens.radiusLg),
                   boxShadow: AppColors.shadowSm),
               child: const Icon(Icons.auto_awesome,
-                  size: 32, color: AppColors.accent),
+                  size: 26, color: AppColors.accent),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: AppTokens.space5),
             Text('Create your first template',
-                style: GoogleFonts.playfairDisplay(
-                    fontSize: 24, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 12),
+                style: AppType.pageTitle.copyWith(
+                    fontSize: 20, color: AppColors.foreground)),
+            const SizedBox(height: AppTokens.space2),
             const Text(
               'Design beautiful labels and documents\nconnected to live data.',
               textAlign: TextAlign.center,
@@ -460,12 +473,16 @@ class _TemplateCardState extends State<_TemplateCard> {
           duration: const Duration(milliseconds: 200),
           decoration: BoxDecoration(
             color: AppColors.card,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(AppTokens.radiusXl),
             border: Border.all(color: AppColors.border),
-            boxShadow: _hovered ? AppColors.shadowLg : [],
+            // A hairline you can see plus a shadow you have to look for, at
+            // rest — the resting shadow used to be empty and only appeared
+            // on hover. Raised to shadowMd on hover; a flatter lift (-1, not
+            // -2) than before, matching Rail's flatter elevation overall.
+            boxShadow: _hovered ? AppColors.shadowMd : AppColors.shadowCard,
           ),
           transform: _hovered
-              ? Matrix4.translationValues(0, -2, 0)
+              ? Matrix4.translationValues(0, -1, 0)
               : Matrix4.identity(),
           child: Column(children: [
             // Preview area
@@ -475,69 +492,35 @@ class _TemplateCardState extends State<_TemplateCard> {
                   decoration: BoxDecoration(
                     color: AppColors.workspaceBg,
                     borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(16)),
+                        top: Radius.circular(AppTokens.radiusXl)),
                   ),
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(AppTokens.space3),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(AppTokens.radiusSm),
                     child: _buildPreview(),
                   ),
                 ),
                 // Type badge
                 Positioned(
-                  top: 12,
-                  left: 12,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: widget.template.docType == 'label'
-                          ? withAlpha(AppColors.accent, 0.15)
-                          : withAlpha(AppColors.primary, 0.1),
-                      borderRadius: BorderRadius.circular(100),
-                    ),
-                    child: Text(
-                      widget.template.docType == 'label' ? 'Label' : 'Document',
-                      style: TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.05,
-                        color: widget.template.docType == 'label'
-                            ? AppColors.accent
-                            : AppColors.primary,
-                      ),
-                    ),
+                  top: AppTokens.space3,
+                  left: AppTokens.space3,
+                  child: PaperBadge(
+                    label: widget.template.docType == 'label' ? 'Label' : 'Document',
+                    tone: widget.template.docType == 'label'
+                        ? PaperTone.accent
+                        : PaperTone.neutral,
                   ),
                 ),
                 // Default badge — shown when this template is the explicit default
                 if (widget.template.isDefault)
-                  Positioned(
-                    top: 12,
-                    right: 12,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppColors.accent,
-                        borderRadius: BorderRadius.circular(100),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.star_rounded,
-                              size: 8,
-                              color: AppColors.accentForeground),
-                          SizedBox(width: 3),
-                          Text(
-                            'Default',
-                            style: TextStyle(
-                              fontSize: 8,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.accentForeground,
-                            ),
-                          ),
-                        ],
-                      ),
+                  const Positioned(
+                    top: AppTokens.space3,
+                    right: AppTokens.space3,
+                    child: PaperBadge(
+                      label: 'Default',
+                      tone: PaperTone.accent,
+                      icon: Icons.star_rounded,
+                      dense: true,
                     ),
                   ),
               ]),
@@ -801,7 +784,7 @@ class _AccentButton extends StatelessWidget {
   const _AccentButton({
     required this.onTap,
     required this.child,
-    this.padding = const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    this.padding = const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
   });
 
   @override
@@ -812,7 +795,7 @@ class _AccentButton extends StatelessWidget {
         padding: padding,
         decoration: BoxDecoration(
           color: AppColors.accent,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppTokens.radiusMd),
         ),
         child: child,
       ),
@@ -833,10 +816,10 @@ class _FilterButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
           color: active ? AppColors.primary : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppTokens.radiusMd),
           border: active
               ? null
               : Border.all(color: AppColors.border),
@@ -844,7 +827,7 @@ class _FilterButton extends StatelessWidget {
         child: Text(
           label,
           style: TextStyle(
-            fontSize: 14,
+            fontSize: AppType.sm,
             fontWeight: FontWeight.w500,
             color:
                 active ? AppColors.primaryForeground : AppColors.mutedForeground,

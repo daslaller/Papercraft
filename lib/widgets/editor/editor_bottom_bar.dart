@@ -6,6 +6,7 @@ import '../../services/paper_size_service.dart';
 import '../../services/printer_provider.dart';
 import '../../state/editor_state.dart';
 import '../../theme/app_colors.dart';
+import '../common/paper_chrome.dart';
 
 class EditorBottomBar extends StatefulWidget {
   const EditorBottomBar({super.key});
@@ -407,8 +408,7 @@ class _PaperSizeDropdown extends StatelessWidget {
     items.add(const PopupMenuItem<String>(
       enabled: false,
       height: 28,
-      child: Text('DOCUMENTS',
-          style: TextStyle(fontSize: 10, letterSpacing: 0.05, color: AppColors.mutedForeground)),
+      child: PaperFieldLabel('Documents'),
     ));
     for (final s in kCanvasSizes.where((s) => s.category != 'label')) {
       items.add(PopupMenuItem<String>(
@@ -423,8 +423,7 @@ class _PaperSizeDropdown extends StatelessWidget {
     items.add(const PopupMenuItem<String>(
       enabled: false,
       height: 28,
-      child: Text('LABELS',
-          style: TextStyle(fontSize: 10, letterSpacing: 0.05, color: AppColors.mutedForeground)),
+      child: PaperFieldLabel('Labels'),
     ));
     for (final s in kCanvasSizes.where((s) => s.category == 'label')) {
       items.add(PopupMenuItem<String>(
@@ -440,8 +439,7 @@ class _PaperSizeDropdown extends StatelessWidget {
       items.add(const PopupMenuItem<String>(
         enabled: false,
         height: 28,
-        child: Text('CUSTOM SIZES',
-            style: TextStyle(fontSize: 10, letterSpacing: 0.05, color: AppColors.mutedForeground)),
+        child: PaperFieldLabel('Custom sizes'),
       ));
       for (final s in customSizes) {
         items.add(PopupMenuItem<String>(

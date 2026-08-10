@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../state/editor_state.dart';
 import '../../theme/app_colors.dart';
 import '../common/color_input.dart';
+import '../common/paper_chrome.dart';
 
 class PageSettingsPanel extends StatefulWidget {
   const PageSettingsPanel({super.key});
@@ -63,11 +64,7 @@ class _PageSettingsPanelState extends State<PageSettingsPanel> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
               // Size selector
-              const Text('SIZE (MM)',
-                  style: TextStyle(
-                      fontSize: 10,
-                      letterSpacing: 0.05,
-                      color: AppColors.mutedForeground)),
+              const PaperFieldLabel('Size (mm)'),
               const SizedBox(height: 6),
               Row(children: [
                 Expanded(child: Column(
@@ -114,11 +111,7 @@ class _PageSettingsPanelState extends State<PageSettingsPanel> {
               const SizedBox(height: 12),
 
               // Background
-              const Text('BACKGROUND',
-                  style: TextStyle(
-                      fontSize: 10,
-                      letterSpacing: 0.05,
-                      color: AppColors.mutedForeground)),
+              const PaperFieldLabel('Background'),
               const SizedBox(height: 6),
               ColorInput(
                 value: template.backgroundColor,
@@ -129,11 +122,7 @@ class _PageSettingsPanelState extends State<PageSettingsPanel> {
                   style: TextStyle(fontSize: 9, color: AppColors.mutedForeground)),
 
               const SizedBox(height: 12),
-              const Text('LAYOUT',
-                  style: TextStyle(
-                      fontSize: 10,
-                      letterSpacing: 0.05,
-                      color: AppColors.mutedForeground)),
+              const PaperFieldLabel('Layout'),
               const SizedBox(height: 6),
               Row(children: [
                 Expanded(

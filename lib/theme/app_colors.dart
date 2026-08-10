@@ -53,6 +53,13 @@ class AppColors {
   static const border3 = Color(0xFFF1F5F9); // slate-100 (light)
   static const input   = Color(0xFFE2E8F0); // slate-200
 
+  /// One step past [border], for an outline meant to be *seen* rather than
+  /// just separate — a selected card, a dashed hint. Rail's equivalent
+  /// (`borderStrong` in `RailTokens`) is slate-300; same value here so a
+  /// selected template card or a focused option reads the same weight it
+  /// would in the host app.
+  static const borderStrong = Color(0xFFCBD5E1); // slate-300
+
   // ── Shadows (§2) ─────────────────────────────────────────────────────────────
   static const shadowSm = [
     BoxShadow(color: Color(0x14000000), blurRadius: 3, offset: Offset(0, 1)),
