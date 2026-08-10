@@ -77,11 +77,20 @@ class PaperBadge extends StatelessWidget {
   final IconData? icon;
   final bool dense;
 
+  /// Opaque, not alpha-blended. A badge on a flat card wouldn't show the
+  /// difference, but this one also sits over the dashboard's live template
+  /// preview (`_TemplateCard` in `dashboard_screen.dart`) — a translucent
+  /// tint let whatever the shop's own design drew at that corner show
+  /// through and read as garbled overlapping text. Rail's own status badge
+  /// has the same property for the same reason (`AppStatusColors` are
+  /// pre-mixed pastels, never alpha composited): chrome that can end up
+  /// over arbitrary content has to be opaque to stay legible regardless of
+  /// what's underneath.
   Color get _background => switch (tone) {
         PaperTone.neutral => AppColors.secondary,
-        PaperTone.accent => withAlpha(AppColors.accent, 0.12),
-        PaperTone.success => withAlpha(AppColors.success, 0.14),
-        PaperTone.warning => withAlpha(AppColors.warning, 0.14),
+        PaperTone.accent => Color.lerp(AppColors.accent, AppColors.card, 0.85)!,
+        PaperTone.success => Color.lerp(AppColors.success, AppColors.card, 0.83)!,
+        PaperTone.warning => Color.lerp(AppColors.warning, AppColors.card, 0.83)!,
       };
 
   Color get _foreground => switch (tone) {
@@ -102,6 +111,10 @@ class PaperBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: _background,
         borderRadius: BorderRadius.circular(AppTokens.radiusXs),
+        // A badge that can land over a live preview needs to read as
+        // something sitting *above* the content, not painted into the same
+        // layer — the same reasoning as the opaque background above.
+        boxShadow: AppColors.shadowSm,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
