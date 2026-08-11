@@ -5,6 +5,7 @@ import '../../models/gradient_def.dart';
 import '../../state/editor_state.dart';
 import '../../theme/app_colors.dart';
 import '../common/gradient_editor.dart';
+import '../common/paper_chrome.dart';
 
 // ── Common small widgets ─────────────────────────────────────────────────────
 
@@ -41,14 +42,7 @@ class _SectionHeaderState extends State<_SectionHeader> {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           color: Colors.transparent,
           child: Row(children: [
-            Expanded(
-              child: Text(widget.title.toUpperCase(),
-                  style: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.05,
-                      color: AppColors.mutedForeground)),
-            ),
+            Expanded(child: PaperFieldLabel(widget.title)),
             Text(_open ? '›' : '›',
                 style: const TextStyle(
                     fontSize: 12,

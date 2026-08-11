@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/element_model.dart';
 import '../../state/editor_state.dart';
 import '../../theme/app_colors.dart';
+import '../common/paper_chrome.dart';
 
 class EditorToolbar extends StatelessWidget {
   final VoidCallback onBack;
@@ -194,15 +195,7 @@ class _GroupLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontSize: 9,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.07,
-          color: AppColors.mutedForeground,
-        ),
-      ),
+      child: PaperFieldLabel(text),
     );
   }
 }

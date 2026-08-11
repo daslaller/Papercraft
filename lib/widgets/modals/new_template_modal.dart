@@ -3,6 +3,7 @@ import '../../models/template_model.dart';
 import '../../services/papercraft_storage.dart';
 import '../../services/printer_provider.dart';
 import '../../theme/app_colors.dart';
+import '../common/paper_chrome.dart';
 
 class NewTemplateModal extends StatefulWidget {
   const NewTemplateModal({super.key, required this.ownerId});
@@ -144,7 +145,7 @@ class _NewTemplateModalState extends State<NewTemplateModal> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _sectionLabel('TEMPLATE NAME'),
+                          _sectionLabel('Template name'),
                           const SizedBox(height: 8),
                           TextField(
                             controller: _nameCtrl,
@@ -162,7 +163,7 @@ class _NewTemplateModalState extends State<NewTemplateModal> {
                             ),
                           ),
                           const SizedBox(height: 24),
-                          _sectionLabel('DOCUMENT TYPE'),
+                          _sectionLabel('Document type'),
                           const SizedBox(height: 8),
                           Row(children: [
                             Expanded(
@@ -213,12 +214,12 @@ class _NewTemplateModalState extends State<NewTemplateModal> {
                           // Printer picker (only when 'printer' selected)
                           if (_docType == 'printer') ...[
                             const SizedBox(height: 20),
-                            _sectionLabel('SELECT PRINTER'),
+                            _sectionLabel('Select printer'),
                             const SizedBox(height: 8),
                             _buildPrinterPicker(),
                           ],
                           const SizedBox(height: 24),
-                          _sectionLabel('CANVAS SIZE'),
+                          _sectionLabel('Canvas size'),
                           const SizedBox(height: 8),
                           Wrap(
                             spacing: 8,
@@ -465,14 +466,7 @@ class _NewTemplateModalState extends State<NewTemplateModal> {
     );
   }
 
-  Widget _sectionLabel(String text) => Text(
-        text,
-        style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.05,
-            color: AppColors.mutedForeground),
-      );
+  Widget _sectionLabel(String text) => PaperFieldLabel(text);
 }
 
 class _TypeOption extends StatelessWidget {

@@ -48,4 +48,15 @@ flutter run -t lib/main_dev.dart
 
 ## Design system
 
-Light UI tokens live in `lib/theme/app_colors.dart` and `lib/theme/app_theme.dart`. Prefer these over hardcoded colors. Dark mode from older specs is deferred.
+Mirrors RepairX's own split: **Anchor** is the colour scheme
+(`lib/theme/app_colors.dart` — slate neutrals, blue-600 accent), **Rail** is
+the component geometry (`lib/theme/app_tokens.dart` — spacing/radius scale,
+type ramp; `lib/theme/app_theme.dart` builds `ThemeData` from both). Rail
+replaced Papercraft's original serif-headline treatment with a single tight
+Inter ramp, thinner borders, and flatter elevation (a hairline border plus a
+shadow you have to look for, not Material elevation). Shared chrome
+primitives — the uppercase field label, the sentence-case section label, the
+tinted status badge — live in `lib/widgets/common/paper_chrome.dart`
+(`PaperFieldLabel` / `PaperSectionLabel` / `PaperBadge`); use these instead
+of a new inline `TextStyle` copy. Prefer all of the above over hardcoded
+colors, spacing, or radii. Dark mode from older specs is deferred.
