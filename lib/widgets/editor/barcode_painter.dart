@@ -1,6 +1,61 @@
+import 'package:barcode/barcode.dart' as bc;
 import 'package:flutter/material.dart';
 import '../../models/element_model.dart';
 import '../../theme/app_colors.dart';
+
+/// Paints a real QR code on the canvas.
+///
+/// Uses `package:barcode` — the same encoder `pdf`'s `pw.BarcodeWidget` uses
+/// for the PDF — so the matrix a designer sees is the matrix that prints. The
+/// canvas previously drew a decorative finder-pattern placeholder while the PDF
+/// fetched a PNG from `api.qrserver.com`, which meant the editor and the label
+/// showed two different things and neither was the scannable code.
+class QrPainter extends CustomPainter {
+  final String data;
+  final Color color;
+
+  const QrPainter({required this.data, this.color = Colors.black});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (data.isEmpty) return;
+    final side = size.shortestSide;
+    if (side <= 0) return;
+
+    final Iterable<bc.BarcodeElement> parts;
+    try {
+      parts = bc.Barcode.qrCode().make(data, width: side, height: side);
+    } catch (_) {
+      // Content the symbology cannot encode. Leave the area blank rather than
+      // painting something that looks like a code but will not scan.
+      return;
+    }
+
+    // Centre the square matrix in a non-square box.
+    final dx = (size.width - side) / 2;
+    final dy = (size.height - side) / 2;
+    final paint = Paint()..color = color;
+
+    for (final part in parts) {
+      if (part is! bc.BarcodeBar || !part.black) continue;
+      canvas.drawRect(
+        Rect.fromLTWH(
+          dx + part.left,
+          dy + part.top,
+          // Nudge outward so adjacent modules meet — hairline gaps between
+          // cells are what make a rendered QR fail to scan.
+          part.width + 0.5,
+          part.height + 0.5,
+        ),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(QrPainter old) =>
+      old.data != data || old.color != color;
+}
 
 // CODE128B patterns (index 0–106, each 11 modules)
 const _code128Patterns = [
@@ -144,10 +199,13 @@ class BarcodePainter extends CustomPainter {
       binary = _encode128B(el.content);
     }
 
-    // QR: show placeholder (real QR render happens in PDF via pw.Barcode.qrCode)
+    // QR is drawn for real, from the same encoder the PDF painter uses. It
+    // used to be a decorative placeholder here while the PDF fetched a PNG
+    // from api.qrserver.com, so the canvas and the printed label showed two
+    // different things and neither was the actual code.
     if (format == 'qr') {
-      _drawQrPlaceholder(canvas, size, el.content,
-          _parseColor(el.color) ?? Colors.black);
+      QrPainter(data: el.content, color: _parseColor(el.color) ?? Colors.black)
+          .paint(canvas, size);
       return;
     }
 
@@ -195,31 +253,6 @@ class BarcodePainter extends CustomPainter {
     }
   }
 
-  void _drawQrPlaceholder(Canvas canvas, Size size, String content, Color color) {
-    // Draw a simple QR-like grid placeholder for the canvas preview.
-    // The PDF renderer uses pw.Barcode.qrCode() for the real thing.
-    final paint = Paint()..color = color;
-    final cellSize = (size.width / 10).clamp(2.0, 8.0);
-    // Draw finder pattern corners
-    for (final (ox, oy) in [(0.0, 0.0), (size.width - cellSize * 7, 0.0),
-                             (0.0, size.height - cellSize * 7)]) {
-      canvas.drawRect(Rect.fromLTWH(ox, oy, cellSize * 7, cellSize * 7),
-          Paint()..color = color..style = PaintingStyle.stroke..strokeWidth = cellSize);
-      canvas.drawRect(Rect.fromLTWH(ox + cellSize * 2, oy + cellSize * 2,
-          cellSize * 3, cellSize * 3), paint);
-    }
-    if (el.displayValue) {
-      final tp = TextPainter(
-        text: TextSpan(
-          text: content.length > 16 ? '${content.substring(0, 16)}…' : content,
-          style: TextStyle(fontSize: 9, color: color),
-        ),
-        textDirection: TextDirection.ltr,
-        textAlign: TextAlign.center,
-      )..layout(maxWidth: size.width);
-      tp.paint(canvas, Offset((size.width - tp.width) / 2, size.height - 12));
-    }
-  }
 
   @override
   bool shouldRepaint(BarcodePainter old) =>

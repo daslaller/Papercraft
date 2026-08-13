@@ -354,23 +354,20 @@ class ElementRenderer extends StatelessWidget {
             e.content, record, entityName, computedFields)
         : e.content;
 
-    final size = (e.width != null && e.height != null)
-        ? [e.width!, e.height!].reduce((a, b) => a < b ? a : b).round()
-        : 80;
-
-    final url =
-        'https://api.qrserver.com/v1/create-qr-code/?data=${Uri.encodeComponent(resolved)}&size=${size}x$size&margin=0';
-
+    // Painted locally from the same encoder the PDF uses, rather than fetched
+    // as a PNG from api.qrserver.com. The old path meant a designer with no
+    // internet saw a placeholder icon, a shop with no internet PRINTED a grey
+    // box in place of a scannable code, and every label in the product
+    // depended on a third-party service staying up.
     return SizedBox(
       width: e.width ?? 80,
       height: e.height ?? 80,
       child: Opacity(
         opacity: e.opacity,
-        child: Image.network(url,
-            fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) =>
-              Container(color: AppColors.secondary,
-                child: const Icon(Icons.qr_code, color: AppColors.mutedForeground))),
+        child: CustomPaint(
+          painter: QrPainter(data: resolved, color: Colors.black),
+          child: const SizedBox.expand(),
+        ),
       ),
     );
   }

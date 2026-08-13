@@ -624,17 +624,25 @@ class PrintService {
     final content = record != null
         ? TokenService.resolveTokens(e.content, record, entityName, computedFields)
         : e.content;
-    final size = [e.width ?? 80, e.height ?? 80].reduce((a, b) => a < b ? a : b).round();
-    final url =
-        'https://api.qrserver.com/v1/create-qr-code/?data=${Uri.encodeComponent(content)}&size=${size}x$size&margin=0';
     final w = _pxToPt(e.width ?? 80);
     final h = _pxToPt(e.height ?? 80);
-    if (imageCache.containsKey(url)) {
-      return pw.Opacity(
-          opacity: e.opacity,
-          child: pw.Image(imageCache[url]!, width: w, height: h));
-    }
-    return pw.Container(width: w, height: h, color: PdfColors.grey200);
+
+    // Drawn locally. This used to fetch a PNG from api.qrserver.com and, when
+    // the request failed, print a grey rectangle where the code should be —
+    // so a shop with no internet printed labels that could not be scanned, and
+    // every ticket's QR depended on a third party staying up. The pdf package
+    // has drawn QR natively all along; the barcode element below was already
+    // using it via _detectBarcode.
+    return pw.Opacity(
+      opacity: e.opacity,
+      child: pw.BarcodeWidget(
+        barcode: pw.Barcode.qrCode(),
+        data: content,
+        width: w,
+        height: h,
+        drawText: false,
+      ),
+    );
   }
 
   static pw.Widget _renderBarcode(
@@ -831,17 +839,7 @@ class PrintService {
       if (e is ImageElement && e.src.isNotEmpty && !cache.containsKey(e.src)) {
         final bytes = await _fetch(e.src);
         if (bytes != null) cache[e.src] = pw.MemoryImage(bytes);
-      } else if (e is QrElement) {
-        final content = record != null
-            ? TokenService.resolveTokens(e.content, record, entityName, computedFields)
-            : e.content;
-        final size = [e.width ?? 80, e.height ?? 80].reduce((a, b) => a < b ? a : b).round();
-        final url =
-            'https://api.qrserver.com/v1/create-qr-code/?data=${Uri.encodeComponent(content)}&size=${size}x$size&margin=0';
-        if (!cache.containsKey(url)) {
-          final bytes = await _fetch(url);
-          if (bytes != null) cache[url] = pw.MemoryImage(bytes);
-        }
+        // QR needs no prefetch — it is drawn locally by pw.BarcodeWidget.
       } else if (e is ContainerElement) {
         await _prefetchImages(e.children, cache, record, entityName, computedFields);
       }
