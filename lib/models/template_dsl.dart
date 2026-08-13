@@ -241,10 +241,17 @@ CanvasElement _compile(
     final r = node['rule'] is Map
         ? Map<String, dynamic>.from(node['rule'] as Map)
         : <String, dynamic>{};
+    // Stroke and radius are explicitly cleared. ShapeElement defaults to a
+    // 1 px #1A1A1A stroke with a 4 px radius, so a "hairline" drawn without
+    // them comes out as a dark rounded outline box — which is exactly what a
+    // divider must not look like.
     return ShapeElement(
       id: id,
       shape: 'rectangle',
       fill: r['color'] as String? ?? kHairline,
+      stroke: 'transparent',
+      strokeWidth: 0,
+      borderRadius: 0,
       height: _d(r['thickness']) ?? 1,
       flex: _flex(node),
     );
@@ -260,6 +267,7 @@ CanvasElement _compile(
       fill: 'transparent',
       stroke: 'transparent',
       strokeWidth: 0,
+      borderRadius: 0,
       height: _d(s['height']) ?? 8,
       flex: _flex(node),
     );

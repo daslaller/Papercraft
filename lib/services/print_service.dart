@@ -8,6 +8,7 @@ import '../models/flow_layout.dart';
 import '../models/table_element.dart';
 import '../models/table_layout.dart';
 import '../models/template_model.dart';
+import '../services/font_registry.dart';
 import '../services/token_service.dart';
 
 double _pxToPt(double px) => px * 0.75;
@@ -38,19 +39,40 @@ class PrintService {
   // ── Fonts ──────────────────────────────────────────────────────────────────
 
   static Future<_FontSet> _loadFonts() async {
+    // A host that ships its own faces (FontRegistry.pdfFonts) skips the
+    // download entirely — no network round trip, and no Helvetica fallback.
+    final supplied = FontRegistry.pdfFonts;
+    if (supplied != null) {
+      try {
+        final f = await supplied();
+        return _FontSet(
+          regular: f.regular,
+          bold: f.bold,
+          italic: f.italic,
+          mono: f.mono,
+          isUnicode: true,
+        );
+      } catch (_) {
+        // Fall through to the download.
+      }
+    }
     try {
       return _FontSet(
         regular: await PdfGoogleFonts.interRegular(),
         bold: await PdfGoogleFonts.interBold(),
         italic: await PdfGoogleFonts.interItalic(),
         mono: pw.Font.courier(),
+        isUnicode: true,
       );
     } catch (_) {
+      // The standard PDF Type 1 faces. They have no Unicode support, so text
+      // is transliterated before it reaches them — see _FontSet.isUnicode.
       return _FontSet(
         regular: pw.Font.helvetica(),
         bold: pw.Font.helveticaBold(),
         italic: pw.Font.helveticaOblique(),
         mono: pw.Font.courier(),
+        isUnicode: false,
       );
     }
   }
@@ -388,7 +410,7 @@ class PrintService {
         padding: pw.EdgeInsets.symmetric(
             horizontal: _pxToPt(e.cellPaddingX), vertical: _pxToPt(6)),
         child: pw.Text(
-          e.emptyText,
+          fonts.safe(e.emptyText),
           style: pw.TextStyle(
               font: fonts.regular,
               fontSize: _pxToPt(e.fontSize),
@@ -408,7 +430,7 @@ class PrintService {
           padding:
               pw.EdgeInsets.symmetric(horizontal: _pxToPt(e.cellPaddingX)),
           child: pw.Text(
-            text,
+            fonts.safe(text),
             maxLines: 1,
             overflow: pw.TextOverflow.clip,
             textAlign: _cellTextAlign(col.align),
@@ -466,7 +488,7 @@ class PrintService {
         pw.Container(
           padding: pw.EdgeInsets.symmetric(
               horizontal: _pxToPt(e.cellPaddingX), vertical: _pxToPt(4)),
-          child: pw.Text(t.overflow!,
+          child: pw.Text(fonts.safe(t.overflow!),
               style: pw.TextStyle(
                   font: fonts.italic,
                   fontSize: _pxToPt(e.fontSize),
@@ -507,9 +529,9 @@ class PrintService {
       Map<String, dynamic>? record,
       String? entityName,
       List<ComputedField> computedFields) {
-    final content = record != null
+    final content = fonts.safe(record != null
         ? TokenService.resolveTokens(e.content, record, entityName, computedFields)
-        : e.content;
+        : e.content);
 
     final isMono = e.fontFamily == 'DM Mono' ||
         e.fontFamily.toLowerCase().contains('courier') ||
@@ -902,5 +924,48 @@ class _FontSet {
   final pw.Font bold;
   final pw.Font italic;
   final pw.Font mono;
-  const _FontSet({required this.regular, required this.bold, required this.italic, required this.mono});
+
+  /// False for the Helvetica fallback, which covers Latin-1 only.
+  final bool isUnicode;
+
+  const _FontSet({
+    required this.regular,
+    required this.bold,
+    required this.italic,
+    required this.mono,
+    this.isUnicode = true,
+  });
+
+  /// Text this font set can actually draw.
+  ///
+  /// The `pdf` package throws when no font can render a character, and that
+  /// throw happens inside `Document.save` — so one em dash in a note field
+  /// destroys the entire document rather than one glyph. On the non-Unicode
+  /// fallback the common typographic characters are transliterated to their
+  /// ASCII equivalents and anything else still outside Latin-1 is dropped.
+  ///
+  /// A shop printing offline gets straight quotes instead of curly ones.
+  /// Before this it got an exception.
+  String safe(String text) {
+    if (isUnicode) return text;
+    const map = {
+      '\u2014': '-', '\u2013': '-', '\u2012': '-', '\u2212': '-',
+      '\u2018': "'", '\u2019': "'", '\u201A': ',',
+      '\u201C': '"', '\u201D': '"', '\u201E': '"',
+      '\u2026': '...', '\u2022': '*', '\u2009': ' ', '\u202F': ' ',
+      '\u00A0': ' ', '\u2011': '-', '\u2032': "'", '\u2033': '"',
+    };
+    final buffer = StringBuffer();
+    for (final rune in text.runes) {
+      final ch = String.fromCharCode(rune);
+      final replacement = map[ch];
+      if (replacement != null) {
+        buffer.write(replacement);
+      } else if (rune <= 0xFF) {
+        buffer.write(ch);
+      }
+      // Anything else is dropped: better a missing character than no document.
+    }
+    return buffer.toString();
+  }
 }

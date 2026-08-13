@@ -112,6 +112,7 @@ export 'services/print_service.dart';
 export 'services/data_source_adapter.dart';
 export 'services/papercraft_storage.dart';
 export 'services/printer_provider.dart';
+export 'services/font_registry.dart';
 export 'services/token_service.dart';
 export 'services/paper_size_service.dart';
 

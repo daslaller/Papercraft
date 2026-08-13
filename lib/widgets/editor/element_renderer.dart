@@ -4,6 +4,7 @@ import '../../models/element_model.dart';
 import '../../models/flow_layout.dart';
 import '../../models/table_layout.dart';
 import '../../models/gradient_def.dart';
+import '../../services/font_registry.dart';
 import '../../services/token_service.dart';
 import '../../theme/app_colors.dart';
 import 'barcode_painter.dart';
@@ -46,12 +47,38 @@ TextDecoration _parseTextDecoration(String? d) => switch (d) {
     };
 
 TextStyle textStyleFrom(TextElement el) {
+  final family = _safeFontFamily(el.fontFamily);
+  final weight = parseFontWeight(el.fontWeight);
+  final style = el.fontStyle == 'italic' ? FontStyle.italic : FontStyle.normal;
+  final color =
+      el.textGradient != null ? Colors.transparent : hexToFlutter(el.color);
+
+  // A host that ships the family as a Flutter asset gets it straight from
+  // there. GoogleFonts.getFont fetches at runtime, and with fetching disabled
+  // (or simply no network) a weight the platform default lacks renders as tofu
+  // boxes — which is easy to miss, because normal-weight text still looks fine
+  // and only the bold runs turn into squares.
+  if (FontRegistry.isBundled(family)) {
+    return TextStyle(
+      fontFamily: family,
+      fontSize: el.fontSize,
+      fontWeight: weight,
+      fontStyle: style,
+      color: color,
+      height: el.lineHeight,
+      letterSpacing: el.letterSpacing,
+      decoration: el.textDecoration != null
+          ? _parseTextDecoration(el.textDecoration)
+          : null,
+    );
+  }
+
   return GoogleFonts.getFont(
-    _safeFontFamily(el.fontFamily),
+    family,
     fontSize: el.fontSize,
-    fontWeight: parseFontWeight(el.fontWeight),
-    fontStyle: el.fontStyle == 'italic' ? FontStyle.italic : FontStyle.normal,
-    color: el.textGradient != null ? Colors.transparent : hexToFlutter(el.color),
+    fontWeight: weight,
+    fontStyle: style,
+    color: color,
     height: el.lineHeight,
     letterSpacing: el.letterSpacing,
     decoration: el.textDecoration != null ? _parseTextDecoration(el.textDecoration) : null,
@@ -549,6 +576,8 @@ class ElementRenderer extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.clip,
             style: TextStyle(
+              fontFamily:
+                  FontRegistry.isBundled(e.fontFamily) ? e.fontFamily : null,
               fontSize: header ? e.headerFontSize : e.fontSize,
               fontWeight: header ? FontWeight.w600 : FontWeight.w400,
               fontStyle: showPlaceholders ? FontStyle.italic : FontStyle.normal,
