@@ -112,4 +112,43 @@ void main() {
       expect(missing, ['insurance.claim_number']);
     });
   });
+
+  group('docRole', () {
+    Template t({String? docRole}) => Template(
+          id: 't',
+          name: 'Default Invoice',
+          docType: 'document',
+          docRole: docRole,
+          canvasSize: 'A4',
+          canvasWidthMm: 210,
+          canvasHeightMm: 297,
+          backgroundColor: '#ffffff',
+          elements: '[]',
+          ownerId: 'o',
+          createdDate: DateTime(2026),
+          updatedDate: DateTime(2026),
+        );
+
+    test('round-trips through JSON', () {
+      expect(Template.fromJson(t(docRole: 'invoice').toJson()).docRole, 'invoice');
+    });
+
+    test('is absent from JSON when unset, so old templates are untouched', () {
+      expect(t().toJson().containsKey('docRole'), isFalse);
+      expect(Template.fromJson(t().toJson()).docRole, isNull);
+    });
+
+    test('survives copyWith', () {
+      expect(t(docRole: 'invoice').copyWith(name: 'Renamed').docRole, 'invoice');
+    });
+
+    test('distinguishes designs that share a docType', () {
+      // The point of it: five A4 documents are all docType "document", so
+      // without a role a host cannot tell an invoice from an intake slip.
+      final invoice = t(docRole: 'invoice');
+      final intake = t(docRole: 'intake');
+      expect(invoice.docType, intake.docType);
+      expect(invoice.docRole, isNot(intake.docRole));
+    });
+  });
 }
