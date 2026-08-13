@@ -249,14 +249,29 @@ class BarcodePainter extends CustomPainter {
     final barColor = _parseColor(el.color) ?? Colors.black;
     final barPaint = Paint()..color = barColor;
 
-    for (int i = 0; i < binary.length; i++) {
-      if (binary[i] == '1') {
-        canvas.drawRect(
-          Rect.fromLTWH(
-              (i * barWidth).floorToDouble(), 2, barWidth.ceilToDouble(), barH),
-          barPaint,
-        );
+    // Draw each *run* of dark modules as one rectangle, at exact coordinates.
+    //
+    // Drawing module-by-module with floor/ceil rounding — which is what this
+    // did — merges the whole symbol into solid blocks as soon as a module is
+    // narrower than a pixel: every bar is widened to a full pixel and snapped
+    // left, so neighbours overlap. A 13-character Code 128 on a 50 mm label is
+    // already under 1 px per module, so the shelf label of any shop using long
+    // SKUs printed an unscannable black smear. Runs at true float widths keep
+    // the ratios the symbology depends on.
+    var i = 0;
+    while (i < binary.length) {
+      if (binary[i] != '1') {
+        i++;
+        continue;
       }
+      final start = i;
+      while (i < binary.length && binary[i] == '1') {
+        i++;
+      }
+      canvas.drawRect(
+        Rect.fromLTWH(start * barWidth, 2, (i - start) * barWidth, barH),
+        barPaint,
+      );
     }
 
     if (el.displayValue) {
