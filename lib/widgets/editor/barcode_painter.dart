@@ -1,6 +1,7 @@
 import 'package:barcode/barcode.dart' as bc;
 import 'package:flutter/material.dart';
 import '../../models/element_model.dart';
+import '../../services/font_registry.dart';
 import '../../theme/app_colors.dart';
 
 /// Paints a real QR code on the canvas.
@@ -191,6 +192,11 @@ String? _encodeEan8(String value) {
   return buf.toString();
 }
 
+/// The family used for a barcode's human-readable value, when the host has
+/// declared one it bundles.
+String? get _readableFamily =>
+    FontRegistry.bundledFamilies.isEmpty ? null : FontRegistry.bundledFamilies.first;
+
 class BarcodePainter extends CustomPainter {
   final BarcodeElement el;
 
@@ -278,7 +284,15 @@ class BarcodePainter extends CustomPainter {
       final tp = TextPainter(
         text: TextSpan(
           text: el.content,
-          style: TextStyle(fontSize: 10, color: barColor),
+          // Named explicitly. A bare TextStyle leans on the platform default,
+          // which is how the human-readable value under a barcode ended up as
+          // tofu boxes in an environment with no system font — the one piece
+          // of a label a human reads when the scanner will not.
+          style: TextStyle(
+            fontFamily: _readableFamily,
+            fontSize: 10,
+            color: barColor,
+          ),
         ),
         textDirection: TextDirection.ltr,
         textAlign: TextAlign.center,
