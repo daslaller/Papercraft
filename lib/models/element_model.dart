@@ -3,6 +3,9 @@ import 'dart:convert';
 import 'package:flutter/painting.dart' show BorderRadius, Radius;
 
 import 'gradient_def.dart';
+import 'table_element.dart';
+
+export 'table_element.dart' show TableColumn, TableElement;
 
 int _counter = 0;
 
@@ -129,6 +132,8 @@ abstract class CanvasElement {
       case 'row':
       case 'col':
         return ContainerElement.fromJson(j);
+      case 'table':
+        return TableElement.fromJson(j);
       default:
         throw ArgumentError('Unknown element type: ${j['type']}');
     }

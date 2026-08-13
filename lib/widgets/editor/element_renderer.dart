@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../models/element_model.dart';
 import '../../models/flow_layout.dart';
+import '../../models/table_layout.dart';
 import '../../models/gradient_def.dart';
 import '../../services/token_service.dart';
 import '../../theme/app_colors.dart';
@@ -93,15 +94,12 @@ List<BoxShadow>? parseBoxShadow(String? css) {
   }
 }
 
-// Returns the alignSelf value for any element type.
+// Returns the alignSelf value for any element type. Delegates to
+// flow_layout.dart so a newly added element type cannot be forgotten here and
+// silently lose its alignment — which is exactly how the PDF's flex helper
+// came to omit QR and barcode.
 String? _childAlignSelf(CanvasElement c) => switch (c) {
-      TextElement e => e.alignSelf,
-      ShapeElement e => e.alignSelf,
-      ImageElement e => e.alignSelf,
-      QrElement e => e.alignSelf,
-      BarcodeElement e => e.alignSelf,
-      ContainerElement e => e.alignSelf,
-      _ => null,
+      _ => alignSelfOf(c),
     };
 
 // Wraps a Row child to respect its alignSelf (cross-axis = vertical in a Row).
@@ -177,6 +175,7 @@ class ElementRenderer extends StatelessWidget {
       QrElement e => _renderQr(e),
       BarcodeElement e => _renderBarcode(e),
       ContainerElement e => _renderContainer(e),
+      TableElement e => _renderTable(e),
       _ => const SizedBox(),
     };
   }
@@ -508,6 +507,128 @@ class ElementRenderer extends StatelessWidget {
                   color: withAlpha(AppColors.foreground, 0.22))),
         ),
       );
+
+  /// Table — the canvas twin of `PrintService._renderTable`.
+  ///
+  /// Both call [resolveTable] and then only draw, so the columns and cell text
+  /// a designer sees here are by construction the ones that print.
+  ///
+  /// With no bound record (the editor, before a sample record is picked) the
+  /// resolver yields no rows, so placeholder rows are drawn instead — a table
+  /// showing nothing but a header gives the designer no sense of its height.
+  Widget _renderTable(TableElement e) {
+    final t = resolveTable(e, record,
+        entityName: entityName, computedFields: computedFields);
+
+    final columns = t.columns.isNotEmpty
+        ? t.columns
+        : const [
+            TableColumn(key: 'column', label: 'Column'),
+            TableColumn(key: 'value', label: 'Value', align: 'right'),
+          ];
+    final showPlaceholders = t.isEmpty && record == null;
+    final cells = showPlaceholders
+        ? [
+            for (var r = 0; r < 3; r++)
+              [for (final c in columns) '{{${e.rowSource}[].${c.key}}}'],
+          ]
+        : t.cells;
+
+    final grid = BorderSide(
+        color: hexToFlutter(e.gridColor),
+        width: e.gridWidth);
+
+    Widget cell(String text, TableColumn col, {required bool header}) => Container(
+          height: header ? e.headerHeight : e.rowHeight,
+          alignment: switch (col.align) {
+            'right' => Alignment.centerRight,
+            'center' => Alignment.center,
+            _ => Alignment.centerLeft,
+          },
+          padding: EdgeInsets.symmetric(horizontal: e.cellPaddingX),
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.clip,
+            style: TextStyle(
+              fontSize: header ? e.headerFontSize : e.fontSize,
+              fontWeight: header ? FontWeight.w600 : FontWeight.w400,
+              fontStyle: showPlaceholders ? FontStyle.italic : FontStyle.normal,
+              color:
+                  header ? hexToFlutter(e.headerColor) : hexToFlutter(e.color),
+            ),
+          ),
+        );
+
+    if (t.columns.isEmpty && !showPlaceholders) {
+      return Padding(
+        padding: EdgeInsets.symmetric(horizontal: e.cellPaddingX, vertical: 6),
+        child: Text(e.emptyText,
+            style: TextStyle(
+                fontSize: e.fontSize,
+                color: hexToFlutter(e.headerColor))),
+      );
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Table(
+          columnWidths: {
+            for (var i = 0; i < columns.length; i++)
+              i: columns[i].width != null
+                  ? FixedColumnWidth(columns[i].width!)
+                  : FlexColumnWidth(columns[i].flex),
+          },
+          children: [
+            if (e.showHeader)
+              TableRow(
+                decoration: BoxDecoration(
+                  color: hexToFlutter(e.headerBackground),
+                  border: Border(bottom: grid),
+                ),
+                children: [
+                  for (final col in columns)
+                    cell(
+                        record != null
+                            ? TokenService.resolveTokens(col.label, record,
+                                entityName, computedFields)
+                            : col.label,
+                        col,
+                        header: true),
+                ],
+              ),
+            for (var r = 0; r < cells.length; r++)
+              TableRow(
+                decoration: BoxDecoration(
+                  color: e.zebra && r.isOdd
+                      ? hexToFlutter(e.zebraColor)
+                      : null,
+                  border: Border(bottom: grid),
+                ),
+                children: [
+                  for (var c = 0; c < columns.length; c++)
+                    cell(c < cells[r].length ? cells[r][c] : '', columns[c],
+                        header: false),
+                ],
+              ),
+          ],
+        ),
+        if (t.overflow != null)
+          Padding(
+            padding:
+                EdgeInsets.symmetric(horizontal: e.cellPaddingX, vertical: 4),
+            child: Text(t.overflow!,
+                style: TextStyle(
+                    fontSize: e.fontSize,
+                    fontStyle: FontStyle.italic,
+                    color: hexToFlutter(e.headerColor) ??
+                        const Color(0xFF64748B))),
+          ),
+      ],
+    );
+  }
 
   CrossAxisAlignment _crossAxis(FlowAlign a) => switch (a) {
         FlowAlign.start => CrossAxisAlignment.start,

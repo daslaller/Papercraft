@@ -99,8 +99,11 @@ export 'screens/dashboard_screen.dart';
 // ── Models ────────────────────────────────────────────────────────────────────
 export 'models/template_model.dart';
 export 'models/element_model.dart';
+export 'models/flow_layout.dart';
 export 'models/gradient_def.dart';
 export 'models/layout_helpers.dart';
+export 'models/table_element.dart';
+export 'models/table_layout.dart';
 
 // ── Services ──────────────────────────────────────────────────────────────────
 export 'services/template_service.dart';

@@ -131,8 +131,10 @@ class PapercraftRenderer extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: sections
+                            // No cast — a section is anything that flows, which
+                            // since the table element is no longer container-only.
                             .map((e) => ElementRenderer(
-                                  el: e as ContainerElement,
+                                  el: e,
                                   record: record,
                                   entityName: entityName,
                                   computedFields: computedFields,

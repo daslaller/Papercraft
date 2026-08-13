@@ -5,6 +5,8 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import '../models/element_model.dart';
 import '../models/flow_layout.dart';
+import '../models/table_element.dart';
+import '../models/table_layout.dart';
 import '../models/template_model.dart';
 import '../services/token_service.dart';
 
@@ -106,12 +108,23 @@ class PrintService {
 
   // ── Single record PDF ──────────────────────────────────────────────────────
 
+  /// [paginate] controls whether content may spill onto further pages.
+  ///
+  /// `null` (the default) means **auto**: paginate when the template is
+  /// flow-only, i.e. every element is a section with no absolute `x`/`y`.
+  /// That restriction is not a policy choice — a `pw.Positioned` inside a
+  /// `pw.Stack` has no meaning once content reflows across pages, so only a
+  /// plain vertical list of sections can be handed to `pw.MultiPage`.
+  ///
+  /// Every template authored before this existed has absolute coordinates and
+  /// therefore keeps the single-page path byte for byte.
   static Future<Uint8List> buildPdf({
     required Template template,
     required List<CanvasElement> elements,
     Map<String, dynamic>? record,
     String? entityName,
     List<ComputedField> computedFields = const [],
+    bool? paginate,
   }) async {
     final doc = pw.Document();
     final fonts = await _loadFonts();
@@ -123,6 +136,25 @@ class PrintService {
       template.canvasHeightMm * PdfPageFormat.mm,
       marginAll: 0,
     );
+
+    if (paginate ?? isFlowOnly(elements)) {
+      doc.addPage(pw.MultiPage(
+        pageTheme: pw.PageTheme(
+          pageFormat: pageFormat,
+          margin: pw.EdgeInsets.zero,
+          buildBackground: (_) => pw.FullPage(
+            ignoreMargins: true,
+            child: pw.Container(color: _hex(template.backgroundColor)),
+          ),
+        ),
+        build: (_) => [
+          for (final e in elements)
+            _renderElement(
+                e, fonts, imageCache, record, entityName, computedFields),
+        ],
+      ));
+      return doc.save();
+    }
 
     doc.addPage(pw.Page(
       pageFormat: pageFormat,
@@ -324,8 +356,150 @@ class PrintService {
     if (e is QrElement) return _renderQr(e, imageCache, record, entityName, computedFields);
     if (e is BarcodeElement) return _renderBarcode(e, record, entityName, computedFields);
     if (e is ContainerElement) return _renderContainer(e, fonts, imageCache, record, entityName, computedFields);
+    if (e is TableElement) return _renderTable(e, fonts, record, entityName, computedFields);
     return pw.SizedBox();
   }
+
+  // ── Table ──────────────────────────────────────────────────────────────────
+
+  /// Built on `pw.Table` rather than composed from the row/col path, for three
+  /// reasons that all matter on a real invoice:
+  ///
+  /// - **Column edges line up.** A `pw.Row` of `Expanded` cells cannot keep
+  ///   columns aligned once one cell wraps to two lines; `columnWidths` does it
+  ///   by construction.
+  /// - **The header repeats.** `pw.TableRow(repeat: true)` redraws the header
+  ///   on every page a long table spills onto. Hand-composed rows lose that.
+  /// - **It spans pages.** `pw.Table` is one of the pdf package's spanning
+  ///   widgets; a `pw.Column` of rows is not, and would overflow rather than
+  ///   paginate — which would make the MultiPage path pointless for exactly the
+  ///   element that needs it most.
+  static pw.Widget _renderTable(
+      TableElement e,
+      _FontSet fonts,
+      Map<String, dynamic>? record,
+      String? entityName,
+      List<ComputedField> computedFields) {
+    final t = resolveTable(e, record,
+        entityName: entityName, computedFields: computedFields);
+
+    if (t.columns.isEmpty || t.isEmpty) {
+      return pw.Container(
+        padding: pw.EdgeInsets.symmetric(
+            horizontal: _pxToPt(e.cellPaddingX), vertical: _pxToPt(6)),
+        child: pw.Text(
+          e.emptyText,
+          style: pw.TextStyle(
+              font: fonts.regular,
+              fontSize: _pxToPt(e.fontSize),
+              color: _hex(e.headerColor)),
+        ),
+      );
+    }
+
+    final hairline = pw.BorderSide(
+        color: _hex(e.gridColor), width: _pxToPt(e.gridWidth));
+
+    pw.Widget cell(String text, TableColumn col,
+            {required bool header}) =>
+        pw.Container(
+          height: _pxToPt(header ? e.headerHeight : e.rowHeight),
+          alignment: _cellAlignment(col.align),
+          padding:
+              pw.EdgeInsets.symmetric(horizontal: _pxToPt(e.cellPaddingX)),
+          child: pw.Text(
+            text,
+            maxLines: 1,
+            overflow: pw.TextOverflow.clip,
+            textAlign: _cellTextAlign(col.align),
+            style: pw.TextStyle(
+              font: header ? fonts.bold : fonts.regular,
+              fontSize: _pxToPt(header ? e.headerFontSize : e.fontSize),
+              color: _hex(header ? e.headerColor : e.color),
+            ),
+          ),
+        );
+
+    final rows = <pw.TableRow>[
+      if (e.showHeader)
+        pw.TableRow(
+          repeat: true,
+          decoration: pw.BoxDecoration(
+            color: _hex(e.headerBackground),
+            border: pw.Border(bottom: hairline),
+          ),
+          children: [
+            for (final col in t.columns)
+              cell(
+                  record != null
+                      ? TokenService.resolveTokens(
+                          col.label, record, entityName, computedFields)
+                      : col.label,
+                  col,
+                  header: true),
+          ],
+        ),
+      for (var r = 0; r < t.cells.length; r++)
+        pw.TableRow(
+          decoration: pw.BoxDecoration(
+            color: e.zebra && r.isOdd ? _hex(e.zebraColor) : null,
+            border: pw.Border(bottom: hairline),
+          ),
+          children: [
+            for (var c = 0; c < t.columns.length; c++)
+              cell(t.cells[r][c], t.columns[c], header: false),
+          ],
+        ),
+    ];
+
+    final table = pw.Table(
+      columnWidths: _pdfColumnWidths(t.columns),
+      children: rows,
+    );
+
+    // A clipped table that says nothing reads as a complete one.
+    if (t.overflow == null) return table;
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      children: [
+        table,
+        pw.Container(
+          padding: pw.EdgeInsets.symmetric(
+              horizontal: _pxToPt(e.cellPaddingX), vertical: _pxToPt(4)),
+          child: pw.Text(t.overflow!,
+              style: pw.TextStyle(
+                  font: fonts.italic,
+                  fontSize: _pxToPt(e.fontSize),
+                  color: _hex(e.headerColor))),
+        ),
+      ],
+    );
+  }
+
+  /// Fixed columns keep their width; the rest split what is left by flex.
+  static Map<int, pw.TableColumnWidth> _pdfColumnWidths(
+      List<TableColumn> columns) {
+    final out = <int, pw.TableColumnWidth>{};
+    for (var i = 0; i < columns.length; i++) {
+      final c = columns[i];
+      out[i] = c.width != null
+          ? pw.FixedColumnWidth(_pxToPt(c.width!))
+          : pw.FlexColumnWidth(c.flex);
+    }
+    return out;
+  }
+
+  static pw.Alignment _cellAlignment(String align) => switch (align) {
+        'right' => pw.Alignment.centerRight,
+        'center' => pw.Alignment.center,
+        _ => pw.Alignment.centerLeft,
+      };
+
+  static pw.TextAlign _cellTextAlign(String align) => switch (align) {
+        'right' => pw.TextAlign.right,
+        'center' => pw.TextAlign.center,
+        _ => pw.TextAlign.left,
+      };
 
   static pw.Widget _renderText(
       TextElement e,
