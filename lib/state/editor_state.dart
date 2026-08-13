@@ -338,6 +338,7 @@ class EditorState extends ChangeNotifier {
     if (el is ImageElement) return el.copyWith(zIndex: z);
     if (el is QrElement) return el.copyWith(zIndex: z);
     if (el is BarcodeElement) return el.copyWith(zIndex: z);
+    if (el is TableElement) return el.copyWith(zIndex: z);
     if (el is ContainerElement) return el.copyWith(zIndex: z);
     return el;
   }

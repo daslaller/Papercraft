@@ -1,6 +1,62 @@
+import 'package:barcode/barcode.dart' as bc;
 import 'package:flutter/material.dart';
 import '../../models/element_model.dart';
+import '../../services/font_registry.dart';
 import '../../theme/app_colors.dart';
+
+/// Paints a real QR code on the canvas.
+///
+/// Uses `package:barcode` — the same encoder `pdf`'s `pw.BarcodeWidget` uses
+/// for the PDF — so the matrix a designer sees is the matrix that prints. The
+/// canvas previously drew a decorative finder-pattern placeholder while the PDF
+/// fetched a PNG from `api.qrserver.com`, which meant the editor and the label
+/// showed two different things and neither was the scannable code.
+class QrPainter extends CustomPainter {
+  final String data;
+  final Color color;
+
+  const QrPainter({required this.data, this.color = Colors.black});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (data.isEmpty) return;
+    final side = size.shortestSide;
+    if (side <= 0) return;
+
+    final Iterable<bc.BarcodeElement> parts;
+    try {
+      parts = bc.Barcode.qrCode().make(data, width: side, height: side);
+    } catch (_) {
+      // Content the symbology cannot encode. Leave the area blank rather than
+      // painting something that looks like a code but will not scan.
+      return;
+    }
+
+    // Centre the square matrix in a non-square box.
+    final dx = (size.width - side) / 2;
+    final dy = (size.height - side) / 2;
+    final paint = Paint()..color = color;
+
+    for (final part in parts) {
+      if (part is! bc.BarcodeBar || !part.black) continue;
+      canvas.drawRect(
+        Rect.fromLTWH(
+          dx + part.left,
+          dy + part.top,
+          // Nudge outward so adjacent modules meet — hairline gaps between
+          // cells are what make a rendered QR fail to scan.
+          part.width + 0.5,
+          part.height + 0.5,
+        ),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(QrPainter old) =>
+      old.data != data || old.color != color;
+}
 
 // CODE128B patterns (index 0–106, each 11 modules)
 const _code128Patterns = [
@@ -65,12 +121,31 @@ String? _encode128B(String value) {
 String detectBarcodeFormat(String content) {
   final onlyDigits = RegExp(r'^\d+$').hasMatch(content);
   if (onlyDigits) {
-    if (content.length == 13) return 'ean13';
-    if (content.length == 8)  return 'ean8';
-    if (content.length == 12) return 'upca';
+    // Length alone does not make a valid EAN/UPC — the check digit has to
+    // match, and the encoders throw when it does not. Verify before choosing,
+    // and fall through to Code 128, which accepts any digits. See
+    // PrintService._detectBarcode, which this must stay in step with.
+    if (content.length == 13 && _encodes(bc.Barcode.ean13(), content)) {
+      return 'ean13';
+    }
+    if (content.length == 8 && _encodes(bc.Barcode.ean8(), content)) {
+      return 'ean8';
+    }
+    if (content.length == 12 && _encodes(bc.Barcode.upcA(), content)) {
+      return 'upca';
+    }
   }
   if (content.startsWith('http') || content.length > 25) return 'qr';
   return 'code128';
+}
+
+bool _encodes(bc.Barcode barcode, String content) {
+  try {
+    barcode.verify(content);
+    return true;
+  } catch (_) {
+    return false;
+  }
 }
 
 // EAN-13 encoding tables
@@ -117,6 +192,11 @@ String? _encodeEan8(String value) {
   return buf.toString();
 }
 
+/// The family used for a barcode's human-readable value, when the host has
+/// declared one it bundles.
+String? get _readableFamily =>
+    FontRegistry.bundledFamilies.isEmpty ? null : FontRegistry.bundledFamilies.first;
+
 class BarcodePainter extends CustomPainter {
   final BarcodeElement el;
 
@@ -144,10 +224,13 @@ class BarcodePainter extends CustomPainter {
       binary = _encode128B(el.content);
     }
 
-    // QR: show placeholder (real QR render happens in PDF via pw.Barcode.qrCode)
+    // QR is drawn for real, from the same encoder the PDF painter uses. It
+    // used to be a decorative placeholder here while the PDF fetched a PNG
+    // from api.qrserver.com, so the canvas and the printed label showed two
+    // different things and neither was the actual code.
     if (format == 'qr') {
-      _drawQrPlaceholder(canvas, size, el.content,
-          _parseColor(el.color) ?? Colors.black);
+      QrPainter(data: el.content, color: _parseColor(el.color) ?? Colors.black)
+          .paint(canvas, size);
       return;
     }
 
@@ -172,21 +255,44 @@ class BarcodePainter extends CustomPainter {
     final barColor = _parseColor(el.color) ?? Colors.black;
     final barPaint = Paint()..color = barColor;
 
-    for (int i = 0; i < binary.length; i++) {
-      if (binary[i] == '1') {
-        canvas.drawRect(
-          Rect.fromLTWH(
-              (i * barWidth).floorToDouble(), 2, barWidth.ceilToDouble(), barH),
-          barPaint,
-        );
+    // Draw each *run* of dark modules as one rectangle, at exact coordinates.
+    //
+    // Drawing module-by-module with floor/ceil rounding — which is what this
+    // did — merges the whole symbol into solid blocks as soon as a module is
+    // narrower than a pixel: every bar is widened to a full pixel and snapped
+    // left, so neighbours overlap. A 13-character Code 128 on a 50 mm label is
+    // already under 1 px per module, so the shelf label of any shop using long
+    // SKUs printed an unscannable black smear. Runs at true float widths keep
+    // the ratios the symbology depends on.
+    var i = 0;
+    while (i < binary.length) {
+      if (binary[i] != '1') {
+        i++;
+        continue;
       }
+      final start = i;
+      while (i < binary.length && binary[i] == '1') {
+        i++;
+      }
+      canvas.drawRect(
+        Rect.fromLTWH(start * barWidth, 2, (i - start) * barWidth, barH),
+        barPaint,
+      );
     }
 
     if (el.displayValue) {
       final tp = TextPainter(
         text: TextSpan(
           text: el.content,
-          style: TextStyle(fontSize: 10, color: barColor),
+          // Named explicitly. A bare TextStyle leans on the platform default,
+          // which is how the human-readable value under a barcode ended up as
+          // tofu boxes in an environment with no system font — the one piece
+          // of a label a human reads when the scanner will not.
+          style: TextStyle(
+            fontFamily: _readableFamily,
+            fontSize: 10,
+            color: barColor,
+          ),
         ),
         textDirection: TextDirection.ltr,
         textAlign: TextAlign.center,
@@ -195,31 +301,6 @@ class BarcodePainter extends CustomPainter {
     }
   }
 
-  void _drawQrPlaceholder(Canvas canvas, Size size, String content, Color color) {
-    // Draw a simple QR-like grid placeholder for the canvas preview.
-    // The PDF renderer uses pw.Barcode.qrCode() for the real thing.
-    final paint = Paint()..color = color;
-    final cellSize = (size.width / 10).clamp(2.0, 8.0);
-    // Draw finder pattern corners
-    for (final (ox, oy) in [(0.0, 0.0), (size.width - cellSize * 7, 0.0),
-                             (0.0, size.height - cellSize * 7)]) {
-      canvas.drawRect(Rect.fromLTWH(ox, oy, cellSize * 7, cellSize * 7),
-          Paint()..color = color..style = PaintingStyle.stroke..strokeWidth = cellSize);
-      canvas.drawRect(Rect.fromLTWH(ox + cellSize * 2, oy + cellSize * 2,
-          cellSize * 3, cellSize * 3), paint);
-    }
-    if (el.displayValue) {
-      final tp = TextPainter(
-        text: TextSpan(
-          text: content.length > 16 ? '${content.substring(0, 16)}…' : content,
-          style: TextStyle(fontSize: 9, color: color),
-        ),
-        textDirection: TextDirection.ltr,
-        textAlign: TextAlign.center,
-      )..layout(maxWidth: size.width);
-      tp.paint(canvas, Offset((size.width - tp.width) / 2, size.height - 12));
-    }
-  }
 
   @override
   bool shouldRepaint(BarcodePainter old) =>

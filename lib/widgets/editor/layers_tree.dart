@@ -210,6 +210,7 @@ class _TreeNodeState extends State<_TreeNode> {
         'barcode' => Icons.bar_chart,
         'row' => Icons.table_rows_outlined,
         'col' => Icons.view_column_outlined,
+        'table' => Icons.table_rows_outlined,
         _ => Icons.square_outlined,
       };
 
@@ -228,6 +229,7 @@ class _TreeNodeState extends State<_TreeNode> {
       'image' => 'Image',
       'qr' => 'QR Code',
       'barcode' => 'Barcode',
+      'table' => 'Table',
       _ => el.type,
     };
   }

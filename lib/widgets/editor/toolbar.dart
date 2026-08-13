@@ -95,6 +95,11 @@ class EditorToolbar extends StatelessWidget {
                     onTap: () => state.addElement(ImageElement.create()),
                   ),
                   _InsertButton(
+                    icon: Icons.table_rows_outlined,
+                    tooltip: 'Table (line items)',
+                    onTap: () => state.addElement(TableElement.create()),
+                  ),
+                  _InsertButton(
                     icon: Icons.qr_code,
                     tooltip: 'QR Code',
                     onTap: () => state.addElement(QrElement.create()),

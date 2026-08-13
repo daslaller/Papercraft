@@ -99,8 +99,12 @@ export 'screens/dashboard_screen.dart';
 // ── Models ────────────────────────────────────────────────────────────────────
 export 'models/template_model.dart';
 export 'models/element_model.dart';
+export 'models/flow_layout.dart';
 export 'models/gradient_def.dart';
 export 'models/layout_helpers.dart';
+export 'models/table_element.dart';
+export 'models/table_layout.dart';
+export 'models/template_dsl.dart';
 
 // ── Services ──────────────────────────────────────────────────────────────────
 export 'services/template_service.dart';
@@ -108,6 +112,7 @@ export 'services/print_service.dart';
 export 'services/data_source_adapter.dart';
 export 'services/papercraft_storage.dart';
 export 'services/printer_provider.dart';
+export 'services/font_registry.dart';
 export 'services/token_service.dart';
 export 'services/paper_size_service.dart';
 

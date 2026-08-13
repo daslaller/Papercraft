@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../models/element_model.dart';
+import '../../models/flow_layout.dart';
+import '../../models/table_layout.dart';
 import '../../models/gradient_def.dart';
+import '../../services/font_registry.dart';
 import '../../services/token_service.dart';
 import '../../theme/app_colors.dart';
 import 'barcode_painter.dart';
@@ -44,12 +47,38 @@ TextDecoration _parseTextDecoration(String? d) => switch (d) {
     };
 
 TextStyle textStyleFrom(TextElement el) {
+  final family = _safeFontFamily(el.fontFamily);
+  final weight = parseFontWeight(el.fontWeight);
+  final style = el.fontStyle == 'italic' ? FontStyle.italic : FontStyle.normal;
+  final color =
+      el.textGradient != null ? Colors.transparent : hexToFlutter(el.color);
+
+  // A host that ships the family as a Flutter asset gets it straight from
+  // there. GoogleFonts.getFont fetches at runtime, and with fetching disabled
+  // (or simply no network) a weight the platform default lacks renders as tofu
+  // boxes — which is easy to miss, because normal-weight text still looks fine
+  // and only the bold runs turn into squares.
+  if (FontRegistry.isBundled(family)) {
+    return TextStyle(
+      fontFamily: family,
+      fontSize: el.fontSize,
+      fontWeight: weight,
+      fontStyle: style,
+      color: color,
+      height: el.lineHeight,
+      letterSpacing: el.letterSpacing,
+      decoration: el.textDecoration != null
+          ? _parseTextDecoration(el.textDecoration)
+          : null,
+    );
+  }
+
   return GoogleFonts.getFont(
-    _safeFontFamily(el.fontFamily),
+    family,
     fontSize: el.fontSize,
-    fontWeight: parseFontWeight(el.fontWeight),
-    fontStyle: el.fontStyle == 'italic' ? FontStyle.italic : FontStyle.normal,
-    color: el.textGradient != null ? Colors.transparent : hexToFlutter(el.color),
+    fontWeight: weight,
+    fontStyle: style,
+    color: color,
     height: el.lineHeight,
     letterSpacing: el.letterSpacing,
     decoration: el.textDecoration != null ? _parseTextDecoration(el.textDecoration) : null,
@@ -92,15 +121,12 @@ List<BoxShadow>? parseBoxShadow(String? css) {
   }
 }
 
-// Returns the alignSelf value for any element type.
+// Returns the alignSelf value for any element type. Delegates to
+// flow_layout.dart so a newly added element type cannot be forgotten here and
+// silently lose its alignment — which is exactly how the PDF's flex helper
+// came to omit QR and barcode.
 String? _childAlignSelf(CanvasElement c) => switch (c) {
-      TextElement e => e.alignSelf,
-      ShapeElement e => e.alignSelf,
-      ImageElement e => e.alignSelf,
-      QrElement e => e.alignSelf,
-      BarcodeElement e => e.alignSelf,
-      ContainerElement e => e.alignSelf,
-      _ => null,
+      _ => alignSelfOf(c),
     };
 
 // Wraps a Row child to respect its alignSelf (cross-axis = vertical in a Row).
@@ -176,6 +202,7 @@ class ElementRenderer extends StatelessWidget {
       QrElement e => _renderQr(e),
       BarcodeElement e => _renderBarcode(e),
       ContainerElement e => _renderContainer(e),
+      TableElement e => _renderTable(e),
       _ => const SizedBox(),
     };
   }
@@ -290,8 +317,13 @@ class ElementRenderer extends StatelessWidget {
                 ? Colors.transparent
                 : hexToFlutter(e.fill))
             : null,
-        border: Border.all(
-            color: hexToFlutter(e.stroke), width: e.strokeWidth),
+        // A zero-width or transparent stroke means NO border. Border.all still
+        // paints a hairline at width 0, and hexToFlutter('transparent') falls
+        // through to black — so a shape asking for no outline got a thin black
+        // one, which turned every hairline divider into an outlined box.
+        border: (e.strokeWidth <= 0 || e.stroke == 'transparent')
+            ? null
+            : Border.all(color: hexToFlutter(e.stroke), width: e.strokeWidth),
         borderRadius: isCircle
             ? BorderRadius.circular(10000)
             : e.corners.toBorderRadius(),
@@ -354,23 +386,20 @@ class ElementRenderer extends StatelessWidget {
             e.content, record, entityName, computedFields)
         : e.content;
 
-    final size = (e.width != null && e.height != null)
-        ? [e.width!, e.height!].reduce((a, b) => a < b ? a : b).round()
-        : 80;
-
-    final url =
-        'https://api.qrserver.com/v1/create-qr-code/?data=${Uri.encodeComponent(resolved)}&size=${size}x$size&margin=0';
-
+    // Painted locally from the same encoder the PDF uses, rather than fetched
+    // as a PNG from api.qrserver.com. The old path meant a designer with no
+    // internet saw a placeholder icon, a shop with no internet PRINTED a grey
+    // box in place of a scannable code, and every label in the product
+    // depended on a third-party service staying up.
     return SizedBox(
       width: e.width ?? 80,
       height: e.height ?? 80,
       child: Opacity(
         opacity: e.opacity,
-        child: Image.network(url,
-            fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) =>
-              Container(color: AppColors.secondary,
-                child: const Icon(Icons.qr_code, color: AppColors.mutedForeground))),
+        child: CustomPaint(
+          painter: QrPainter(data: resolved, color: Colors.black),
+          child: const SizedBox.expand(),
+        ),
       ),
     );
   }
@@ -428,9 +457,8 @@ class ElementRenderer extends StatelessWidget {
             );
     } else if (isRow) {
       // ── Row mode ─────────────────────────────────────────────────────────────
-      // Each child shares available width via Expanded (flex weight).
-      // alignSelf on each child controls its vertical position within the row.
-      // CrossAxisAlignment.start lets children control their own alignment.
+      // Layout decisions come from `slotFor` so this and the PDF painter in
+      // print_service.dart cannot disagree — see models/flow_layout.dart.
       if (e.children.isEmpty) {
         content = _emptySlot();
       } else {
@@ -438,17 +466,17 @@ class ElementRenderer extends StatelessWidget {
         for (int i = 0; i < e.children.length; i++) {
           if (i > 0) kids.add(SizedBox(width: e.gap));
           final c = e.children[i];
-          final flex = _childFlex(c) > 0 ? _childFlex(c) : 1;
+          final slot = slotFor(e, c);
           final renderer = ElementRenderer(
               el: c, record: record, entityName: entityName, computedFields: computedFields);
-          kids.add(Expanded(
-            flex: flex,
-            child: _wrapAlignSelfRow(c, renderer),
-          ));
+          final child = _wrapAlignSelfRow(c, renderer);
+          kids.add(slot.expand
+              ? Expanded(flex: slot.flex, child: child)
+              : SizedBox(height: slot.fixedHeight, child: child));
         }
         final row = Row(
           mainAxisSize: MainAxisSize.max,
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: _crossAxis(containerAlign(e)),
           children: kids,
         );
         // Section rows have no fixed height (isSection→height:null). Wrap
@@ -458,8 +486,9 @@ class ElementRenderer extends StatelessWidget {
       }
     } else {
       // ── Column mode ──────────────────────────────────────────────────────────
-      // alignSelf on each child controls its horizontal position within the col.
-      // CrossAxisAlignment.start lets children control their own alignment.
+      // alignSelf on each child controls its horizontal position within the col;
+      // the container's own alignItems sets the default. Same `slotFor` the PDF
+      // painter uses.
       if (e.children.isEmpty) {
         content = _emptySlot();
       } else {
@@ -467,16 +496,18 @@ class ElementRenderer extends StatelessWidget {
         for (int i = 0; i < e.children.length; i++) {
           if (i > 0) kids.add(SizedBox(height: e.gap));
           final c = e.children[i];
+          final slot = slotFor(e, c);
           final renderer = ElementRenderer(
               el: c, record: record, entityName: entityName, computedFields: computedFields);
           kids.add(SizedBox(
-            height: c.height,
+            width: slot.stretchWidth ? double.infinity : null,
+            height: slot.fixedHeight,
             child: _wrapAlignSelfCol(c, renderer),
           ));
         }
         content = Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: _crossAxis(containerAlign(e)),
           children: kids,
         );
       }
@@ -489,7 +520,8 @@ class ElementRenderer extends StatelessWidget {
         opacity: e.opacity,
         child: Container(
           decoration: decoration,
-          padding: EdgeInsets.all(e.padding),
+          padding: EdgeInsets.symmetric(
+              horizontal: e.padX, vertical: e.padY),
           child: content,
         ),
       ),
@@ -506,15 +538,136 @@ class ElementRenderer extends StatelessWidget {
         ),
       );
 
-  int _childFlex(CanvasElement c) {
-    if (c is TextElement) return c.flex ?? 0;
-    if (c is ShapeElement) return c.flex ?? 0;
-    if (c is ImageElement) return c.flex ?? 0;
-    if (c is QrElement) return c.flex ?? 0;
-    if (c is BarcodeElement) return c.flex ?? 0;
-    if (c is ContainerElement) return c.flex ?? 0;
-    return 0;
+  /// Table — the canvas twin of `PrintService._renderTable`.
+  ///
+  /// Both call [resolveTable] and then only draw, so the columns and cell text
+  /// a designer sees here are by construction the ones that print.
+  ///
+  /// With no bound record (the editor, before a sample record is picked) the
+  /// resolver yields no rows, so placeholder rows are drawn instead — a table
+  /// showing nothing but a header gives the designer no sense of its height.
+  Widget _renderTable(TableElement e) {
+    final t = resolveTable(e, record,
+        entityName: entityName, computedFields: computedFields);
+
+    final columns = t.columns.isNotEmpty
+        ? t.columns
+        : const [
+            TableColumn(key: 'column', label: 'Column'),
+            TableColumn(key: 'value', label: 'Value', align: 'right'),
+          ];
+    final showPlaceholders = t.isEmpty && record == null;
+    final cells = showPlaceholders
+        ? [
+            for (var r = 0; r < 3; r++)
+              [for (final c in columns) '{{${e.rowSource}[].${c.key}}}'],
+          ]
+        : t.cells;
+
+    final grid = BorderSide(
+        color: hexToFlutter(e.gridColor),
+        width: e.gridWidth);
+
+    Widget cell(String text, TableColumn col, {required bool header}) => Container(
+          height: header ? e.headerHeight : e.rowHeight,
+          alignment: switch (col.align) {
+            'right' => Alignment.centerRight,
+            'center' => Alignment.center,
+            _ => Alignment.centerLeft,
+          },
+          padding: EdgeInsets.symmetric(horizontal: e.cellPaddingX),
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.clip,
+            style: TextStyle(
+              fontFamily:
+                  FontRegistry.isBundled(e.fontFamily) ? e.fontFamily : null,
+              fontSize: header ? e.headerFontSize : e.fontSize,
+              fontWeight: header ? FontWeight.w600 : FontWeight.w400,
+              fontStyle: showPlaceholders ? FontStyle.italic : FontStyle.normal,
+              color:
+                  header ? hexToFlutter(e.headerColor) : hexToFlutter(e.color),
+            ),
+          ),
+        );
+
+    if (t.columns.isEmpty && !showPlaceholders) {
+      return Padding(
+        padding: EdgeInsets.symmetric(horizontal: e.cellPaddingX, vertical: 6),
+        child: Text(e.emptyText,
+            style: TextStyle(
+                fontSize: e.fontSize,
+                color: hexToFlutter(e.headerColor))),
+      );
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Table(
+          columnWidths: {
+            for (var i = 0; i < columns.length; i++)
+              i: columns[i].width != null
+                  ? FixedColumnWidth(columns[i].width!)
+                  : FlexColumnWidth(columns[i].flex),
+          },
+          children: [
+            if (e.showHeader)
+              TableRow(
+                decoration: BoxDecoration(
+                  color: hexToFlutter(e.headerBackground),
+                  border: Border(bottom: grid),
+                ),
+                children: [
+                  for (final col in columns)
+                    cell(
+                        record != null
+                            ? TokenService.resolveTokens(col.label, record,
+                                entityName, computedFields)
+                            : col.label,
+                        col,
+                        header: true),
+                ],
+              ),
+            for (var r = 0; r < cells.length; r++)
+              TableRow(
+                decoration: BoxDecoration(
+                  color: e.zebra && r.isOdd
+                      ? hexToFlutter(e.zebraColor)
+                      : null,
+                  border: Border(bottom: grid),
+                ),
+                children: [
+                  for (var c = 0; c < columns.length; c++)
+                    cell(c < cells[r].length ? cells[r][c] : '', columns[c],
+                        header: false),
+                ],
+              ),
+          ],
+        ),
+        if (t.overflow != null)
+          Padding(
+            padding:
+                EdgeInsets.symmetric(horizontal: e.cellPaddingX, vertical: 4),
+            child: Text(t.overflow!,
+                style: TextStyle(
+                    fontSize: e.fontSize,
+                    fontStyle: FontStyle.italic,
+                    color: hexToFlutter(e.headerColor) ??
+                        const Color(0xFF64748B))),
+          ),
+      ],
+    );
   }
+
+  CrossAxisAlignment _crossAxis(FlowAlign a) => switch (a) {
+        FlowAlign.start => CrossAxisAlignment.start,
+        FlowAlign.center => CrossAxisAlignment.center,
+        FlowAlign.end => CrossAxisAlignment.end,
+        FlowAlign.stretch => CrossAxisAlignment.stretch,
+      };
 
   BoxFit _boxFit(String fit) => switch (fit) {
         'contain' => BoxFit.contain,

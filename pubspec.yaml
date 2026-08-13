@@ -18,6 +18,11 @@ dependencies:
   http: ^1.2.0
   pdf: ^3.10.8
   printing: ^5.13.0
+  # Symbology encoders, shared by the PDF painter (through pdf's
+  # pw.BarcodeWidget) and the canvas painter, so the QR matrix drawn in the
+  # editor is the one that prints. Already resolved transitively via `pdf`;
+  # declared because lib/ now imports it directly.
+  barcode: ^2.2.9
 
 dev_dependencies:
   flutter_test:

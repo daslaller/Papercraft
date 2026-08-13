@@ -4,7 +4,11 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import '../models/element_model.dart';
+import '../models/flow_layout.dart';
+import '../models/table_element.dart';
+import '../models/table_layout.dart';
 import '../models/template_model.dart';
+import '../services/font_registry.dart';
 import '../services/token_service.dart';
 
 double _pxToPt(double px) => px * 0.75;
@@ -35,19 +39,40 @@ class PrintService {
   // ── Fonts ──────────────────────────────────────────────────────────────────
 
   static Future<_FontSet> _loadFonts() async {
+    // A host that ships its own faces (FontRegistry.pdfFonts) skips the
+    // download entirely — no network round trip, and no Helvetica fallback.
+    final supplied = FontRegistry.pdfFonts;
+    if (supplied != null) {
+      try {
+        final f = await supplied();
+        return _FontSet(
+          regular: f.regular,
+          bold: f.bold,
+          italic: f.italic,
+          mono: f.mono,
+          isUnicode: true,
+        );
+      } catch (_) {
+        // Fall through to the download.
+      }
+    }
     try {
       return _FontSet(
         regular: await PdfGoogleFonts.interRegular(),
         bold: await PdfGoogleFonts.interBold(),
         italic: await PdfGoogleFonts.interItalic(),
         mono: pw.Font.courier(),
+        isUnicode: true,
       );
     } catch (_) {
+      // The standard PDF Type 1 faces. They have no Unicode support, so text
+      // is transliterated before it reaches them — see _FontSet.isUnicode.
       return _FontSet(
         regular: pw.Font.helvetica(),
         bold: pw.Font.helveticaBold(),
         italic: pw.Font.helveticaOblique(),
         mono: pw.Font.courier(),
+        isUnicode: false,
       );
     }
   }
@@ -63,7 +88,11 @@ class PrintService {
     List<ComputedField> computedFields,
     String bgColor,
   ) {
-    final sections = elements.where((e) => e.isSection).cast<ContainerElement>();
+    // No cast. A section is any element that flows down the page, and since
+    // the table element gained a settable `isSection` that is no longer only a
+    // ContainerElement — the old `.cast<ContainerElement>()` threw on the first
+    // flowing table. `_renderElement` already dispatches by type.
+    final sections = elements.where((e) => e.isSection).toList();
     final sorted = elements
         .where((e) => !e.isSection && e.x != null && e.y != null)
         .toList()
@@ -101,12 +130,23 @@ class PrintService {
 
   // ── Single record PDF ──────────────────────────────────────────────────────
 
+  /// [paginate] controls whether content may spill onto further pages.
+  ///
+  /// `null` (the default) means **auto**: paginate when the template is
+  /// flow-only, i.e. every element is a section with no absolute `x`/`y`.
+  /// That restriction is not a policy choice — a `pw.Positioned` inside a
+  /// `pw.Stack` has no meaning once content reflows across pages, so only a
+  /// plain vertical list of sections can be handed to `pw.MultiPage`.
+  ///
+  /// Every template authored before this existed has absolute coordinates and
+  /// therefore keeps the single-page path byte for byte.
   static Future<Uint8List> buildPdf({
     required Template template,
     required List<CanvasElement> elements,
     Map<String, dynamic>? record,
     String? entityName,
     List<ComputedField> computedFields = const [],
+    bool? paginate,
   }) async {
     final doc = pw.Document();
     final fonts = await _loadFonts();
@@ -118,6 +158,25 @@ class PrintService {
       template.canvasHeightMm * PdfPageFormat.mm,
       marginAll: 0,
     );
+
+    if (paginate ?? isFlowOnly(elements)) {
+      doc.addPage(pw.MultiPage(
+        pageTheme: pw.PageTheme(
+          pageFormat: pageFormat,
+          margin: pw.EdgeInsets.zero,
+          buildBackground: (_) => pw.FullPage(
+            ignoreMargins: true,
+            child: pw.Container(color: _hex(template.backgroundColor)),
+          ),
+        ),
+        build: (_) => [
+          for (final e in elements)
+            _renderElement(
+                e, fonts, imageCache, record, entityName, computedFields),
+        ],
+      ));
+      return doc.save();
+    }
 
     doc.addPage(pw.Page(
       pageFormat: pageFormat,
@@ -319,8 +378,150 @@ class PrintService {
     if (e is QrElement) return _renderQr(e, imageCache, record, entityName, computedFields);
     if (e is BarcodeElement) return _renderBarcode(e, record, entityName, computedFields);
     if (e is ContainerElement) return _renderContainer(e, fonts, imageCache, record, entityName, computedFields);
+    if (e is TableElement) return _renderTable(e, fonts, record, entityName, computedFields);
     return pw.SizedBox();
   }
+
+  // ── Table ──────────────────────────────────────────────────────────────────
+
+  /// Built on `pw.Table` rather than composed from the row/col path, for three
+  /// reasons that all matter on a real invoice:
+  ///
+  /// - **Column edges line up.** A `pw.Row` of `Expanded` cells cannot keep
+  ///   columns aligned once one cell wraps to two lines; `columnWidths` does it
+  ///   by construction.
+  /// - **The header repeats.** `pw.TableRow(repeat: true)` redraws the header
+  ///   on every page a long table spills onto. Hand-composed rows lose that.
+  /// - **It spans pages.** `pw.Table` is one of the pdf package's spanning
+  ///   widgets; a `pw.Column` of rows is not, and would overflow rather than
+  ///   paginate — which would make the MultiPage path pointless for exactly the
+  ///   element that needs it most.
+  static pw.Widget _renderTable(
+      TableElement e,
+      _FontSet fonts,
+      Map<String, dynamic>? record,
+      String? entityName,
+      List<ComputedField> computedFields) {
+    final t = resolveTable(e, record,
+        entityName: entityName, computedFields: computedFields);
+
+    if (t.columns.isEmpty || t.isEmpty) {
+      return pw.Container(
+        padding: pw.EdgeInsets.symmetric(
+            horizontal: _pxToPt(e.cellPaddingX), vertical: _pxToPt(6)),
+        child: pw.Text(
+          fonts.safe(e.emptyText),
+          style: pw.TextStyle(
+              font: fonts.regular,
+              fontSize: _pxToPt(e.fontSize),
+              color: _hex(e.headerColor)),
+        ),
+      );
+    }
+
+    final hairline = pw.BorderSide(
+        color: _hex(e.gridColor), width: _pxToPt(e.gridWidth));
+
+    pw.Widget cell(String text, TableColumn col,
+            {required bool header}) =>
+        pw.Container(
+          height: _pxToPt(header ? e.headerHeight : e.rowHeight),
+          alignment: _cellAlignment(col.align),
+          padding:
+              pw.EdgeInsets.symmetric(horizontal: _pxToPt(e.cellPaddingX)),
+          child: pw.Text(
+            fonts.safe(text),
+            maxLines: 1,
+            overflow: pw.TextOverflow.clip,
+            textAlign: _cellTextAlign(col.align),
+            style: pw.TextStyle(
+              font: header ? fonts.bold : fonts.regular,
+              fontSize: _pxToPt(header ? e.headerFontSize : e.fontSize),
+              color: _hex(header ? e.headerColor : e.color),
+            ),
+          ),
+        );
+
+    final rows = <pw.TableRow>[
+      if (e.showHeader)
+        pw.TableRow(
+          repeat: true,
+          decoration: pw.BoxDecoration(
+            color: _hex(e.headerBackground),
+            border: pw.Border(bottom: hairline),
+          ),
+          children: [
+            for (final col in t.columns)
+              cell(
+                  record != null
+                      ? TokenService.resolveTokens(
+                          col.label, record, entityName, computedFields)
+                      : col.label,
+                  col,
+                  header: true),
+          ],
+        ),
+      for (var r = 0; r < t.cells.length; r++)
+        pw.TableRow(
+          decoration: pw.BoxDecoration(
+            color: e.zebra && r.isOdd ? _hex(e.zebraColor) : null,
+            border: pw.Border(bottom: hairline),
+          ),
+          children: [
+            for (var c = 0; c < t.columns.length; c++)
+              cell(t.cells[r][c], t.columns[c], header: false),
+          ],
+        ),
+    ];
+
+    final table = pw.Table(
+      columnWidths: _pdfColumnWidths(t.columns),
+      children: rows,
+    );
+
+    // A clipped table that says nothing reads as a complete one.
+    if (t.overflow == null) return table;
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      children: [
+        table,
+        pw.Container(
+          padding: pw.EdgeInsets.symmetric(
+              horizontal: _pxToPt(e.cellPaddingX), vertical: _pxToPt(4)),
+          child: pw.Text(fonts.safe(t.overflow!),
+              style: pw.TextStyle(
+                  font: fonts.italic,
+                  fontSize: _pxToPt(e.fontSize),
+                  color: _hex(e.headerColor))),
+        ),
+      ],
+    );
+  }
+
+  /// Fixed columns keep their width; the rest split what is left by flex.
+  static Map<int, pw.TableColumnWidth> _pdfColumnWidths(
+      List<TableColumn> columns) {
+    final out = <int, pw.TableColumnWidth>{};
+    for (var i = 0; i < columns.length; i++) {
+      final c = columns[i];
+      out[i] = c.width != null
+          ? pw.FixedColumnWidth(_pxToPt(c.width!))
+          : pw.FlexColumnWidth(c.flex);
+    }
+    return out;
+  }
+
+  static pw.Alignment _cellAlignment(String align) => switch (align) {
+        'right' => pw.Alignment.centerRight,
+        'center' => pw.Alignment.center,
+        _ => pw.Alignment.centerLeft,
+      };
+
+  static pw.TextAlign _cellTextAlign(String align) => switch (align) {
+        'right' => pw.TextAlign.right,
+        'center' => pw.TextAlign.center,
+        _ => pw.TextAlign.left,
+      };
 
   static pw.Widget _renderText(
       TextElement e,
@@ -328,9 +529,9 @@ class PrintService {
       Map<String, dynamic>? record,
       String? entityName,
       List<ComputedField> computedFields) {
-    final content = record != null
+    final content = fonts.safe(record != null
         ? TokenService.resolveTokens(e.content, record, entityName, computedFields)
-        : e.content;
+        : e.content);
 
     final isMono = e.fontFamily == 'DM Mono' ||
         e.fontFamily.toLowerCase().contains('courier') ||
@@ -394,7 +595,12 @@ class PrintService {
       decoration = pw.BoxDecoration(
         color: e.gradient == null ? fillColor : null,
         gradient: e.gradient != null ? _pdfGradient(e.gradient!) : null,
-        border: pw.Border.all(color: _hex(e.stroke), width: _pxToPt(e.strokeWidth)),
+        // Same rule as the canvas painter: no stroke means no border, rather
+        // than a black hairline from _hex('transparent') falling back to black.
+        border: (e.strokeWidth <= 0 || e.stroke == 'transparent')
+            ? null
+            : pw.Border.all(
+                color: _hex(e.stroke), width: _pxToPt(e.strokeWidth)),
         borderRadius: isCircle
             ? pw.BorderRadius.circular(10000)
             : _pdfCorners(e.corners),
@@ -445,17 +651,25 @@ class PrintService {
     final content = record != null
         ? TokenService.resolveTokens(e.content, record, entityName, computedFields)
         : e.content;
-    final size = [e.width ?? 80, e.height ?? 80].reduce((a, b) => a < b ? a : b).round();
-    final url =
-        'https://api.qrserver.com/v1/create-qr-code/?data=${Uri.encodeComponent(content)}&size=${size}x$size&margin=0';
     final w = _pxToPt(e.width ?? 80);
     final h = _pxToPt(e.height ?? 80);
-    if (imageCache.containsKey(url)) {
-      return pw.Opacity(
-          opacity: e.opacity,
-          child: pw.Image(imageCache[url]!, width: w, height: h));
-    }
-    return pw.Container(width: w, height: h, color: PdfColors.grey200);
+
+    // Drawn locally. This used to fetch a PNG from api.qrserver.com and, when
+    // the request failed, print a grey rectangle where the code should be —
+    // so a shop with no internet printed labels that could not be scanned, and
+    // every ticket's QR depended on a third party staying up. The pdf package
+    // has drawn QR natively all along; the barcode element below was already
+    // using it via _detectBarcode.
+    return pw.Opacity(
+      opacity: e.opacity,
+      child: pw.BarcodeWidget(
+        barcode: pw.Barcode.qrCode(),
+        data: content,
+        width: w,
+        height: h,
+        drawText: false,
+      ),
+    );
   }
 
   static pw.Widget _renderBarcode(
@@ -492,14 +706,36 @@ class PrintService {
   static pw.Barcode _detectBarcode(String content) {
     final onlyDigits = RegExp(r'^\d+$').hasMatch(content);
     if (onlyDigits) {
-      if (content.length == 13) return pw.Barcode.ean13();
-      if (content.length == 8)  return pw.Barcode.ean8();
-      if (content.length == 12) return pw.Barcode.upcA();
+      // Length alone does not make a valid EAN/UPC — those symbologies carry a
+      // check digit, and `barcode` THROWS when it does not match. Picking by
+      // length only meant a 13-digit SKU that is not a real EAN took down the
+      // whole document with a BarcodeException, so a shop using its own
+      // numeric SKUs got an exception instead of a shelf label. Verify first
+      // and fall back to Code 128, which encodes any digits.
+      if (content.length == 13 && _encodes(pw.Barcode.ean13(), content)) {
+        return pw.Barcode.ean13();
+      }
+      if (content.length == 8 && _encodes(pw.Barcode.ean8(), content)) {
+        return pw.Barcode.ean8();
+      }
+      if (content.length == 12 && _encodes(pw.Barcode.upcA(), content)) {
+        return pw.Barcode.upcA();
+      }
     }
     if (content.startsWith('http') || content.length > 25) {
       return pw.Barcode.qrCode();
     }
     return pw.Barcode.code128();
+  }
+
+  /// Whether [barcode] can actually encode [content].
+  static bool _encodes(pw.Barcode barcode, String content) {
+    try {
+      barcode.verify(content);
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   static pw.Widget _renderContainer(
@@ -525,6 +761,7 @@ class PrintService {
       );
     } else {
       final isRow = e.type == 'row';
+      final align = containerAlign(e);
       final kids = <pw.Widget>[];
       for (int i = 0; i < e.children.length; i++) {
         if (i > 0) {
@@ -533,16 +770,26 @@ class PrintService {
               : pw.SizedBox(height: _pxToPt(e.gap)));
         }
         final c = e.children[i];
-        final child = _renderElement(c, fonts, imageCache, record, entityName, computedFields);
-        if (isRow) {
-          // Equal-width slices: Expanded with flex ≥ 1
-          final flex = _childFlex(c) > 0 ? _childFlex(c) : 1;
-          kids.add(pw.Expanded(flex: flex, child: child));
+        final slot = slotFor(e, c);
+        var child =
+            _renderElement(c, fonts, imageCache, record, entityName, computedFields);
+
+        // alignSelf used to be honoured on the editor canvas and dropped here,
+        // so a designer nudged a child in the preview and the PDF ignored it.
+        if (slot.align != null && slot.align != FlowAlign.stretch) {
+          child = pw.Align(
+            alignment: _pdfAlignment(slot.align!, isRow: isRow),
+            child: child,
+          );
+        }
+
+        if (slot.expand) {
+          kids.add(pw.Expanded(flex: slot.flex, child: child));
         } else {
-          // Column: full-width children, use stored height or intrinsic
           kids.add(pw.SizedBox(
-            width: double.infinity,
-            height: c.height != null ? _pxToPt(c.height!) : null,
+            width: slot.stretchWidth ? double.infinity : null,
+            height:
+                slot.fixedHeight != null ? _pxToPt(slot.fixedHeight!) : null,
             child: child,
           ));
         }
@@ -550,12 +797,12 @@ class PrintService {
       content = isRow
           ? pw.Row(
               mainAxisSize: pw.MainAxisSize.max,
-              crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+              crossAxisAlignment: _pdfCrossAxis(align),
               children: kids,
             )
           : pw.Column(
               mainAxisSize: pw.MainAxisSize.min,
-              crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+              crossAxisAlignment: _pdfCrossAxis(align),
               children: kids,
             );
     }
@@ -577,18 +824,38 @@ class PrintService {
           gradient: e.gradient != null ? _pdfGradient(e.gradient!) : null,
           borderRadius: _pdfCorners(e.corners),
         ),
-        padding: pw.EdgeInsets.all(_pxToPt(e.padding)),
+        padding: pw.EdgeInsets.symmetric(
+            horizontal: _pxToPt(e.padX), vertical: _pxToPt(e.padY)),
         child: content,
       ),
     );
   }
 
-  static int _childFlex(CanvasElement c) {
-    if (c is TextElement) return c.flex ?? 0;
-    if (c is ShapeElement) return c.flex ?? 0;
-    if (c is ImageElement) return c.flex ?? 0;
-    if (c is ContainerElement) return c.flex ?? 0;
-    return 0;
+  static pw.CrossAxisAlignment _pdfCrossAxis(FlowAlign a) => switch (a) {
+        FlowAlign.start => pw.CrossAxisAlignment.start,
+        FlowAlign.center => pw.CrossAxisAlignment.center,
+        FlowAlign.end => pw.CrossAxisAlignment.end,
+        FlowAlign.stretch => pw.CrossAxisAlignment.stretch,
+      };
+
+  /// A child's own alignment inside its slot. The cross axis of a row is
+  /// vertical and of a column horizontal, so the same [FlowAlign] maps to
+  /// different corners depending on the parent.
+  static pw.Alignment _pdfAlignment(FlowAlign a, {required bool isRow}) {
+    if (isRow) {
+      return switch (a) {
+        FlowAlign.start => pw.Alignment.topCenter,
+        FlowAlign.center => pw.Alignment.center,
+        FlowAlign.end => pw.Alignment.bottomCenter,
+        FlowAlign.stretch => pw.Alignment.center,
+      };
+    }
+    return switch (a) {
+      FlowAlign.start => pw.Alignment.centerLeft,
+      FlowAlign.center => pw.Alignment.center,
+      FlowAlign.end => pw.Alignment.centerRight,
+      FlowAlign.stretch => pw.Alignment.center,
+    };
   }
 
   static pw.LinearGradient _pdfGradient(dynamic gd) {
@@ -622,17 +889,7 @@ class PrintService {
       if (e is ImageElement && e.src.isNotEmpty && !cache.containsKey(e.src)) {
         final bytes = await _fetch(e.src);
         if (bytes != null) cache[e.src] = pw.MemoryImage(bytes);
-      } else if (e is QrElement) {
-        final content = record != null
-            ? TokenService.resolveTokens(e.content, record, entityName, computedFields)
-            : e.content;
-        final size = [e.width ?? 80, e.height ?? 80].reduce((a, b) => a < b ? a : b).round();
-        final url =
-            'https://api.qrserver.com/v1/create-qr-code/?data=${Uri.encodeComponent(content)}&size=${size}x$size&margin=0';
-        if (!cache.containsKey(url)) {
-          final bytes = await _fetch(url);
-          if (bytes != null) cache[url] = pw.MemoryImage(bytes);
-        }
+        // QR needs no prefetch — it is drawn locally by pw.BarcodeWidget.
       } else if (e is ContainerElement) {
         await _prefetchImages(e.children, cache, record, entityName, computedFields);
       }
@@ -672,5 +929,48 @@ class _FontSet {
   final pw.Font bold;
   final pw.Font italic;
   final pw.Font mono;
-  const _FontSet({required this.regular, required this.bold, required this.italic, required this.mono});
+
+  /// False for the Helvetica fallback, which covers Latin-1 only.
+  final bool isUnicode;
+
+  const _FontSet({
+    required this.regular,
+    required this.bold,
+    required this.italic,
+    required this.mono,
+    this.isUnicode = true,
+  });
+
+  /// Text this font set can actually draw.
+  ///
+  /// The `pdf` package throws when no font can render a character, and that
+  /// throw happens inside `Document.save` — so one em dash in a note field
+  /// destroys the entire document rather than one glyph. On the non-Unicode
+  /// fallback the common typographic characters are transliterated to their
+  /// ASCII equivalents and anything else still outside Latin-1 is dropped.
+  ///
+  /// A shop printing offline gets straight quotes instead of curly ones.
+  /// Before this it got an exception.
+  String safe(String text) {
+    if (isUnicode) return text;
+    const map = {
+      '\u2014': '-', '\u2013': '-', '\u2012': '-', '\u2212': '-',
+      '\u2018': "'", '\u2019': "'", '\u201A': ',',
+      '\u201C': '"', '\u201D': '"', '\u201E': '"',
+      '\u2026': '...', '\u2022': '*', '\u2009': ' ', '\u202F': ' ',
+      '\u00A0': ' ', '\u2011': '-', '\u2032': "'", '\u2033': '"',
+    };
+    final buffer = StringBuffer();
+    for (final rune in text.runes) {
+      final ch = String.fromCharCode(rune);
+      final replacement = map[ch];
+      if (replacement != null) {
+        buffer.write(replacement);
+      } else if (rune <= 0xFF) {
+        buffer.write(ch);
+      }
+      // Anything else is dropped: better a missing character than no document.
+    }
+    return buffer.toString();
+  }
 }

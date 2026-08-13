@@ -3,6 +3,9 @@ import 'dart:convert';
 import 'package:flutter/painting.dart' show BorderRadius, Radius;
 
 import 'gradient_def.dart';
+import 'table_element.dart';
+
+export 'table_element.dart' show TableColumn, TableElement;
 
 int _counter = 0;
 
@@ -129,6 +132,8 @@ abstract class CanvasElement {
       case 'row':
       case 'col':
         return ContainerElement.fromJson(j);
+      case 'table':
+        return TableElement.fromJson(j);
       default:
         throw ArgumentError('Unknown element type: ${j['type']}');
     }
@@ -972,6 +977,15 @@ class ContainerElement implements CanvasElement {
   final double minHeight;
   final double gap;
   final double padding;
+
+  /// Horizontal and vertical padding overrides.
+  ///
+  /// [padding] is a single `EdgeInsets.all` value, which cannot express the
+  /// asymmetric page margins every real document has — a 40 px gutter down
+  /// both sides with a different gap above and below. These fall back to
+  /// [padding] when unset, so existing templates are unaffected.
+  final double? paddingX;
+  final double? paddingY;
   final String alignItems;
   final bool freePlacement; // true = Stack, false = Row/Col flex
   final String background;
@@ -1003,6 +1017,8 @@ class ContainerElement implements CanvasElement {
     this.minHeight = 60,
     this.gap = 8,
     this.padding = 8,
+    this.paddingX,
+    this.paddingY,
     this.alignItems = 'flex-start',
     this.freePlacement = false,
     this.background = 'transparent',
@@ -1018,6 +1034,12 @@ class ContainerElement implements CanvasElement {
     this.flex,
     this.alignSelf,
   });
+
+  /// Effective horizontal padding — [paddingX] when set, else [padding].
+  double get padX => paddingX ?? padding;
+
+  /// Effective vertical padding — [paddingY] when set, else [padding].
+  double get padY => paddingY ?? padding;
 
   CornerRadii get corners => CornerRadii(
         borderRadius: borderRadius,
@@ -1075,6 +1097,8 @@ class ContainerElement implements CanvasElement {
     double? minHeight,
     double? gap,
     double? padding,
+    double? paddingX,
+    double? paddingY,
     String? alignItems,
     bool? freePlacement,
     String? background,
@@ -1107,6 +1131,8 @@ class ContainerElement implements CanvasElement {
         minHeight: minHeight ?? this.minHeight,
         gap: gap ?? this.gap,
         padding: padding ?? this.padding,
+        paddingX: paddingX ?? this.paddingX,
+        paddingY: paddingY ?? this.paddingY,
         alignItems: alignItems ?? this.alignItems,
         freePlacement: freePlacement ?? this.freePlacement,
         background: background ?? this.background,
@@ -1138,6 +1164,8 @@ class ContainerElement implements CanvasElement {
         'minHeight': minHeight,
         'gap': gap,
         'padding': padding,
+        if (paddingX != null) 'paddingX': paddingX,
+        if (paddingY != null) 'paddingY': paddingY,
         'alignItems': alignItems,
         'freePlacement': freePlacement,
         'background': background,
@@ -1166,6 +1194,8 @@ class ContainerElement implements CanvasElement {
       minHeight: (j['minHeight'] as num? ?? 60).toDouble(),
       gap: (j['gap'] as num? ?? 8).toDouble(),
       padding: (j['padding'] as num? ?? 8).toDouble(),
+      paddingX: (j['paddingX'] as num?)?.toDouble(),
+      paddingY: (j['paddingY'] as num?)?.toDouble(),
       alignItems: j['alignItems'] as String? ?? 'flex-start',
       freePlacement: j['freePlacement'] as bool? ?? false,
       background: j['background'] as String? ?? 'transparent',
