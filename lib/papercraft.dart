@@ -104,6 +104,7 @@ export 'models/gradient_def.dart';
 export 'models/layout_helpers.dart';
 export 'models/table_element.dart';
 export 'models/table_layout.dart';
+export 'models/template_dsl.dart';
 
 // ── Services ──────────────────────────────────────────────────────────────────
 export 'services/template_service.dart';
