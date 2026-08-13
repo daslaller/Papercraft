@@ -136,6 +136,8 @@ CanvasElement _compile(
       children: kids,
       gap: _d(node['gap']) ?? 6,
       padding: _d(node['padding']) ?? 0,
+      paddingX: _d(node['padX']),
+      paddingY: _d(node['padY']),
       // Rows centre their children by default (a label beside a value reads
       // wrong top-aligned); columns stretch so a right-aligned total can find
       // the full width to align against.
@@ -279,6 +281,8 @@ Map<String, dynamic> col(
   List<Map<String, dynamic>> children, {
   double? gap,
   double? padding,
+  double? padX,
+  double? padY,
   String? align,
   String? background,
   int? flex,
@@ -287,6 +291,8 @@ Map<String, dynamic> col(
       'col': children,
       if (gap != null) 'gap': gap,
       if (padding != null) 'padding': padding,
+      if (padX != null) 'padX': padX,
+      if (padY != null) 'padY': padY,
       if (align != null) 'align': align,
       if (background != null) 'background': background,
       if (flex != null) 'flex': flex,
@@ -296,6 +302,8 @@ Map<String, dynamic> row(
   List<Map<String, dynamic>> children, {
   double? gap,
   double? padding,
+  double? padX,
+  double? padY,
   String? align,
   String? background,
   int? flex,
@@ -304,6 +312,8 @@ Map<String, dynamic> row(
       'row': children,
       if (gap != null) 'gap': gap,
       if (padding != null) 'padding': padding,
+      if (padX != null) 'padX': padX,
+      if (padY != null) 'padY': padY,
       if (align != null) 'align': align,
       if (background != null) 'background': background,
       if (flex != null) 'flex': flex,

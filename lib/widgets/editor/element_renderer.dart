@@ -488,7 +488,8 @@ class ElementRenderer extends StatelessWidget {
         opacity: e.opacity,
         child: Container(
           decoration: decoration,
-          padding: EdgeInsets.all(e.padding),
+          padding: EdgeInsets.symmetric(
+              horizontal: e.padX, vertical: e.padY),
           child: content,
         ),
       ),

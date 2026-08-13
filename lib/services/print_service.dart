@@ -775,7 +775,8 @@ class PrintService {
           gradient: e.gradient != null ? _pdfGradient(e.gradient!) : null,
           borderRadius: _pdfCorners(e.corners),
         ),
-        padding: pw.EdgeInsets.all(_pxToPt(e.padding)),
+        padding: pw.EdgeInsets.symmetric(
+            horizontal: _pxToPt(e.padX), vertical: _pxToPt(e.padY)),
         child: content,
       ),
     );
