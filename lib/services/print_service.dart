@@ -595,7 +595,12 @@ class PrintService {
       decoration = pw.BoxDecoration(
         color: e.gradient == null ? fillColor : null,
         gradient: e.gradient != null ? _pdfGradient(e.gradient!) : null,
-        border: pw.Border.all(color: _hex(e.stroke), width: _pxToPt(e.strokeWidth)),
+        // Same rule as the canvas painter: no stroke means no border, rather
+        // than a black hairline from _hex('transparent') falling back to black.
+        border: (e.strokeWidth <= 0 || e.stroke == 'transparent')
+            ? null
+            : pw.Border.all(
+                color: _hex(e.stroke), width: _pxToPt(e.strokeWidth)),
         borderRadius: isCircle
             ? pw.BorderRadius.circular(10000)
             : _pdfCorners(e.corners),

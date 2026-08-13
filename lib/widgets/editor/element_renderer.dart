@@ -317,8 +317,13 @@ class ElementRenderer extends StatelessWidget {
                 ? Colors.transparent
                 : hexToFlutter(e.fill))
             : null,
-        border: Border.all(
-            color: hexToFlutter(e.stroke), width: e.strokeWidth),
+        // A zero-width or transparent stroke means NO border. Border.all still
+        // paints a hairline at width 0, and hexToFlutter('transparent') falls
+        // through to black — so a shape asking for no outline got a thin black
+        // one, which turned every hairline divider into an outlined box.
+        border: (e.strokeWidth <= 0 || e.stroke == 'transparent')
+            ? null
+            : Border.all(color: hexToFlutter(e.stroke), width: e.strokeWidth),
         borderRadius: isCircle
             ? BorderRadius.circular(10000)
             : e.corners.toBorderRadius(),
