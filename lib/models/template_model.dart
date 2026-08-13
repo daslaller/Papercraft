@@ -51,6 +51,20 @@ class Template {
   /// When true, new row/col containers are flow sections at the top of the page.
   /// When false, row/col are freely positioned on the canvas.
   final bool sectionLayoutEnabled;
+
+  /// What this template IS, for a host that ships more than one design.
+  ///
+  /// [docType] is the canvas category — `label` or `document` — which is what
+  /// the dashboard filters and the size presets key off, and it is deliberately
+  /// coarse. A host with an invoice, an estimate, an intake slip and two
+  /// insurance forms cannot tell them apart by it: all five are `document`, so
+  /// "the default document" collapses five designs into one slot.
+  ///
+  /// [docRole] is the host's own identifier for the slot ('invoice',
+  /// 'ticket_label'). Nullable, so every template written before this existed
+  /// is unaffected, and untouched by Papercraft itself beyond storage — the
+  /// host decides what the values mean.
+  final String? docRole;
   /// Explicit per-doc-type default. The host app's storage sets this for the
   /// one template per [docType] that should be picked when printing.
   /// False for all templates means fall back to "most recently updated".
@@ -75,6 +89,7 @@ class Template {
     this.fallbackPrinterName,
     this.fallbackPrinterId,
     this.sectionLayoutEnabled = false,
+    this.docRole,
     this.isDefault = false,
     required this.ownerId,
     required this.createdDate,
@@ -99,6 +114,7 @@ class Template {
     String? fallbackPrinterId,
     bool clearFallbackPrinter = false,
     bool? sectionLayoutEnabled,
+    String? docRole,
     bool? isDefault,
     DateTime? updatedDate,
   }) =>
@@ -124,6 +140,7 @@ class Template {
             : (fallbackPrinterId ?? this.fallbackPrinterId),
         sectionLayoutEnabled:
             sectionLayoutEnabled ?? this.sectionLayoutEnabled,
+        docRole: docRole ?? this.docRole,
         isDefault: isDefault ?? this.isDefault,
         ownerId: ownerId,
         createdDate: createdDate,
@@ -147,6 +164,7 @@ class Template {
           'fallbackPrinterName': fallbackPrinterName,
         if (fallbackPrinterId != null) 'fallbackPrinterId': fallbackPrinterId,
         'sectionLayoutEnabled': sectionLayoutEnabled,
+        if (docRole != null) 'docRole': docRole,
         'isDefault': isDefault,
         'ownerId': ownerId,
         'createdDate': createdDate.toIso8601String(),
@@ -169,6 +187,7 @@ class Template {
         fallbackPrinterName: j['fallbackPrinterName'] as String?,
         fallbackPrinterId: j['fallbackPrinterId'] as String?,
         sectionLayoutEnabled: j['sectionLayoutEnabled'] as bool? ?? false,
+        docRole: j['docRole'] as String?,
         isDefault: j['isDefault'] as bool? ?? false,
         ownerId: j['ownerId'] as String? ?? '',
         createdDate: DateTime.parse(j['createdDate'] as String),
