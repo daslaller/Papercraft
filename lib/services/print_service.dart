@@ -4,6 +4,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import '../models/element_model.dart';
+import '../models/flow_layout.dart';
 import '../models/template_model.dart';
 import '../services/token_service.dart';
 
@@ -63,7 +64,11 @@ class PrintService {
     List<ComputedField> computedFields,
     String bgColor,
   ) {
-    final sections = elements.where((e) => e.isSection).cast<ContainerElement>();
+    // No cast. A section is any element that flows down the page, and since
+    // the table element gained a settable `isSection` that is no longer only a
+    // ContainerElement — the old `.cast<ContainerElement>()` threw on the first
+    // flowing table. `_renderElement` already dispatches by type.
+    final sections = elements.where((e) => e.isSection).toList();
     final sorted = elements
         .where((e) => !e.isSection && e.x != null && e.y != null)
         .toList()
@@ -525,6 +530,7 @@ class PrintService {
       );
     } else {
       final isRow = e.type == 'row';
+      final align = containerAlign(e);
       final kids = <pw.Widget>[];
       for (int i = 0; i < e.children.length; i++) {
         if (i > 0) {
@@ -533,16 +539,26 @@ class PrintService {
               : pw.SizedBox(height: _pxToPt(e.gap)));
         }
         final c = e.children[i];
-        final child = _renderElement(c, fonts, imageCache, record, entityName, computedFields);
-        if (isRow) {
-          // Equal-width slices: Expanded with flex ≥ 1
-          final flex = _childFlex(c) > 0 ? _childFlex(c) : 1;
-          kids.add(pw.Expanded(flex: flex, child: child));
+        final slot = slotFor(e, c);
+        var child =
+            _renderElement(c, fonts, imageCache, record, entityName, computedFields);
+
+        // alignSelf used to be honoured on the editor canvas and dropped here,
+        // so a designer nudged a child in the preview and the PDF ignored it.
+        if (slot.align != null && slot.align != FlowAlign.stretch) {
+          child = pw.Align(
+            alignment: _pdfAlignment(slot.align!, isRow: isRow),
+            child: child,
+          );
+        }
+
+        if (slot.expand) {
+          kids.add(pw.Expanded(flex: slot.flex, child: child));
         } else {
-          // Column: full-width children, use stored height or intrinsic
           kids.add(pw.SizedBox(
-            width: double.infinity,
-            height: c.height != null ? _pxToPt(c.height!) : null,
+            width: slot.stretchWidth ? double.infinity : null,
+            height:
+                slot.fixedHeight != null ? _pxToPt(slot.fixedHeight!) : null,
             child: child,
           ));
         }
@@ -550,12 +566,12 @@ class PrintService {
       content = isRow
           ? pw.Row(
               mainAxisSize: pw.MainAxisSize.max,
-              crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+              crossAxisAlignment: _pdfCrossAxis(align),
               children: kids,
             )
           : pw.Column(
               mainAxisSize: pw.MainAxisSize.min,
-              crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+              crossAxisAlignment: _pdfCrossAxis(align),
               children: kids,
             );
     }
@@ -583,12 +599,31 @@ class PrintService {
     );
   }
 
-  static int _childFlex(CanvasElement c) {
-    if (c is TextElement) return c.flex ?? 0;
-    if (c is ShapeElement) return c.flex ?? 0;
-    if (c is ImageElement) return c.flex ?? 0;
-    if (c is ContainerElement) return c.flex ?? 0;
-    return 0;
+  static pw.CrossAxisAlignment _pdfCrossAxis(FlowAlign a) => switch (a) {
+        FlowAlign.start => pw.CrossAxisAlignment.start,
+        FlowAlign.center => pw.CrossAxisAlignment.center,
+        FlowAlign.end => pw.CrossAxisAlignment.end,
+        FlowAlign.stretch => pw.CrossAxisAlignment.stretch,
+      };
+
+  /// A child's own alignment inside its slot. The cross axis of a row is
+  /// vertical and of a column horizontal, so the same [FlowAlign] maps to
+  /// different corners depending on the parent.
+  static pw.Alignment _pdfAlignment(FlowAlign a, {required bool isRow}) {
+    if (isRow) {
+      return switch (a) {
+        FlowAlign.start => pw.Alignment.topCenter,
+        FlowAlign.center => pw.Alignment.center,
+        FlowAlign.end => pw.Alignment.bottomCenter,
+        FlowAlign.stretch => pw.Alignment.center,
+      };
+    }
+    return switch (a) {
+      FlowAlign.start => pw.Alignment.centerLeft,
+      FlowAlign.center => pw.Alignment.center,
+      FlowAlign.end => pw.Alignment.centerRight,
+      FlowAlign.stretch => pw.Alignment.center,
+    };
   }
 
   static pw.LinearGradient _pdfGradient(dynamic gd) {

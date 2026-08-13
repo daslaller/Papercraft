@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../models/element_model.dart';
+import '../../models/flow_layout.dart';
 import '../../models/gradient_def.dart';
 import '../../services/token_service.dart';
 import '../../theme/app_colors.dart';
@@ -428,9 +429,8 @@ class ElementRenderer extends StatelessWidget {
             );
     } else if (isRow) {
       // ── Row mode ─────────────────────────────────────────────────────────────
-      // Each child shares available width via Expanded (flex weight).
-      // alignSelf on each child controls its vertical position within the row.
-      // CrossAxisAlignment.start lets children control their own alignment.
+      // Layout decisions come from `slotFor` so this and the PDF painter in
+      // print_service.dart cannot disagree — see models/flow_layout.dart.
       if (e.children.isEmpty) {
         content = _emptySlot();
       } else {
@@ -438,17 +438,17 @@ class ElementRenderer extends StatelessWidget {
         for (int i = 0; i < e.children.length; i++) {
           if (i > 0) kids.add(SizedBox(width: e.gap));
           final c = e.children[i];
-          final flex = _childFlex(c) > 0 ? _childFlex(c) : 1;
+          final slot = slotFor(e, c);
           final renderer = ElementRenderer(
               el: c, record: record, entityName: entityName, computedFields: computedFields);
-          kids.add(Expanded(
-            flex: flex,
-            child: _wrapAlignSelfRow(c, renderer),
-          ));
+          final child = _wrapAlignSelfRow(c, renderer);
+          kids.add(slot.expand
+              ? Expanded(flex: slot.flex, child: child)
+              : SizedBox(height: slot.fixedHeight, child: child));
         }
         final row = Row(
           mainAxisSize: MainAxisSize.max,
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: _crossAxis(containerAlign(e)),
           children: kids,
         );
         // Section rows have no fixed height (isSection→height:null). Wrap
@@ -458,8 +458,9 @@ class ElementRenderer extends StatelessWidget {
       }
     } else {
       // ── Column mode ──────────────────────────────────────────────────────────
-      // alignSelf on each child controls its horizontal position within the col.
-      // CrossAxisAlignment.start lets children control their own alignment.
+      // alignSelf on each child controls its horizontal position within the col;
+      // the container's own alignItems sets the default. Same `slotFor` the PDF
+      // painter uses.
       if (e.children.isEmpty) {
         content = _emptySlot();
       } else {
@@ -467,16 +468,18 @@ class ElementRenderer extends StatelessWidget {
         for (int i = 0; i < e.children.length; i++) {
           if (i > 0) kids.add(SizedBox(height: e.gap));
           final c = e.children[i];
+          final slot = slotFor(e, c);
           final renderer = ElementRenderer(
               el: c, record: record, entityName: entityName, computedFields: computedFields);
           kids.add(SizedBox(
-            height: c.height,
+            width: slot.stretchWidth ? double.infinity : null,
+            height: slot.fixedHeight,
             child: _wrapAlignSelfCol(c, renderer),
           ));
         }
         content = Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: _crossAxis(containerAlign(e)),
           children: kids,
         );
       }
@@ -506,15 +509,12 @@ class ElementRenderer extends StatelessWidget {
         ),
       );
 
-  int _childFlex(CanvasElement c) {
-    if (c is TextElement) return c.flex ?? 0;
-    if (c is ShapeElement) return c.flex ?? 0;
-    if (c is ImageElement) return c.flex ?? 0;
-    if (c is QrElement) return c.flex ?? 0;
-    if (c is BarcodeElement) return c.flex ?? 0;
-    if (c is ContainerElement) return c.flex ?? 0;
-    return 0;
-  }
+  CrossAxisAlignment _crossAxis(FlowAlign a) => switch (a) {
+        FlowAlign.start => CrossAxisAlignment.start,
+        FlowAlign.center => CrossAxisAlignment.center,
+        FlowAlign.end => CrossAxisAlignment.end,
+        FlowAlign.stretch => CrossAxisAlignment.stretch,
+      };
 
   BoxFit _boxFit(String fit) => switch (fit) {
         'contain' => BoxFit.contain,
