@@ -120,12 +120,31 @@ String? _encode128B(String value) {
 String detectBarcodeFormat(String content) {
   final onlyDigits = RegExp(r'^\d+$').hasMatch(content);
   if (onlyDigits) {
-    if (content.length == 13) return 'ean13';
-    if (content.length == 8)  return 'ean8';
-    if (content.length == 12) return 'upca';
+    // Length alone does not make a valid EAN/UPC — the check digit has to
+    // match, and the encoders throw when it does not. Verify before choosing,
+    // and fall through to Code 128, which accepts any digits. See
+    // PrintService._detectBarcode, which this must stay in step with.
+    if (content.length == 13 && _encodes(bc.Barcode.ean13(), content)) {
+      return 'ean13';
+    }
+    if (content.length == 8 && _encodes(bc.Barcode.ean8(), content)) {
+      return 'ean8';
+    }
+    if (content.length == 12 && _encodes(bc.Barcode.upcA(), content)) {
+      return 'upca';
+    }
   }
   if (content.startsWith('http') || content.length > 25) return 'qr';
   return 'code128';
+}
+
+bool _encodes(bc.Barcode barcode, String content) {
+  try {
+    barcode.verify(content);
+    return true;
+  } catch (_) {
+    return false;
+  }
 }
 
 // EAN-13 encoding tables

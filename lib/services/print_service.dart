@@ -679,14 +679,36 @@ class PrintService {
   static pw.Barcode _detectBarcode(String content) {
     final onlyDigits = RegExp(r'^\d+$').hasMatch(content);
     if (onlyDigits) {
-      if (content.length == 13) return pw.Barcode.ean13();
-      if (content.length == 8)  return pw.Barcode.ean8();
-      if (content.length == 12) return pw.Barcode.upcA();
+      // Length alone does not make a valid EAN/UPC — those symbologies carry a
+      // check digit, and `barcode` THROWS when it does not match. Picking by
+      // length only meant a 13-digit SKU that is not a real EAN took down the
+      // whole document with a BarcodeException, so a shop using its own
+      // numeric SKUs got an exception instead of a shelf label. Verify first
+      // and fall back to Code 128, which encodes any digits.
+      if (content.length == 13 && _encodes(pw.Barcode.ean13(), content)) {
+        return pw.Barcode.ean13();
+      }
+      if (content.length == 8 && _encodes(pw.Barcode.ean8(), content)) {
+        return pw.Barcode.ean8();
+      }
+      if (content.length == 12 && _encodes(pw.Barcode.upcA(), content)) {
+        return pw.Barcode.upcA();
+      }
     }
     if (content.startsWith('http') || content.length > 25) {
       return pw.Barcode.qrCode();
     }
     return pw.Barcode.code128();
+  }
+
+  /// Whether [barcode] can actually encode [content].
+  static bool _encodes(pw.Barcode barcode, String content) {
+    try {
+      barcode.verify(content);
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   static pw.Widget _renderContainer(

@@ -96,4 +96,63 @@ void main() {
       expect(resolved, 'TCK-4821');
     });
   });
+
+  group('symbology selection', () {
+    test('a 13-digit SKU with a non-EAN checksum still prints', () async {
+      // Detection used to pick EAN-13 on length alone, and `barcode` THROWS
+      // when the check digit does not match — so a shop numbering its own
+      // parts with 13 digits got a BarcodeException instead of a shelf label,
+      // and the exception took the whole PDF with it.
+      final bytes = await PrintService.buildPdf(
+        template: Template(
+          id: 't',
+          name: 'Product label',
+          docType: 'label',
+          canvasSize: 'custom',
+          canvasWidthMm: 50,
+          canvasHeightMm: 25,
+          backgroundColor: '#ffffff',
+          elements: '[]',
+          ownerId: 'o',
+          createdDate: DateTime(2026),
+          updatedDate: DateTime(2026),
+        ),
+        elements: const [
+          BarcodeElement(
+              id: 'b',
+              x: 4,
+              y: 4,
+              width: 160,
+              height: 40,
+              content: '{{product.sku}}'),
+        ],
+        record: {'product.sku': '7350100112233'},
+      );
+
+      expect(bytes.length, greaterThan(500));
+    });
+
+    test('a genuine EAN-13 is still encoded as EAN-13', () async {
+      final bytes = await PrintService.buildPdf(
+        template: Template(
+          id: 't',
+          name: 'Product label',
+          docType: 'label',
+          canvasSize: 'custom',
+          canvasWidthMm: 50,
+          canvasHeightMm: 25,
+          backgroundColor: '#ffffff',
+          elements: '[]',
+          ownerId: 'o',
+          createdDate: DateTime(2026),
+          updatedDate: DateTime(2026),
+        ),
+        elements: const [
+          BarcodeElement(
+              id: 'b', x: 4, y: 4, width: 160, height: 40, content: '5901234123457'),
+        ],
+      );
+      expect(bytes.length, greaterThan(500));
+    });
+  });
 }
