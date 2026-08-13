@@ -377,6 +377,7 @@ CanvasElement _withPos(CanvasElement el, double x, double y) {
   if (el is ImageElement) return el.copyWith(x: x, y: y);
   if (el is QrElement) return el.copyWith(x: x, y: y);
   if (el is BarcodeElement) return el.copyWith(x: x, y: y);
+  if (el is TableElement) return el.copyWith(x: x, y: y);
   if (el is ContainerElement) return el.copyWith(x: x, y: y);
   return el;
 }
@@ -387,6 +388,7 @@ CanvasElement _withGeom(CanvasElement el, double x, double y, double w, double h
   if (el is ImageElement) return el.copyWith(x: x, y: y, width: w, height: h);
   if (el is QrElement) return el.copyWith(x: x, y: y, width: w, height: h);
   if (el is BarcodeElement) return el.copyWith(x: x, y: y, width: w, height: h);
+  if (el is TableElement) return el.copyWith(x: x, y: y, width: w, height: h);
   if (el is ContainerElement) return el.copyWith(x: x, y: y, width: w, height: h);
   return el;
 }

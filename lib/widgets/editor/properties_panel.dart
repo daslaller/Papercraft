@@ -6,6 +6,7 @@ import '../../state/editor_state.dart';
 import '../../theme/app_colors.dart';
 import '../common/gradient_editor.dart';
 import '../common/paper_chrome.dart';
+import 'properties/table_properties.dart';
 
 // ── Common small widgets ─────────────────────────────────────────────────────
 
@@ -336,6 +337,11 @@ class PropertiesPanel extends StatelessWidget {
       if (el is ImageElement) _buildImageSection(el, update),
       if (el is QrElement) _buildQrSection(el, update),
       if (el is BarcodeElement) _buildBarcodeSection(el, update),
+      if (el is TableElement)
+        _SectionHeader(
+          title: 'Table',
+          child: TableProperties(el: el, update: update),
+        ),
       if (el is ContainerElement) _buildLayoutSection(el, update),
 
       // Elevation (absolute only)
@@ -1120,6 +1126,7 @@ CanvasElement _withX(CanvasElement el, double v) {
   if (el is ImageElement) return el.copyWith(x: v);
   if (el is QrElement) return el.copyWith(x: v);
   if (el is BarcodeElement) return el.copyWith(x: v);
+  if (el is TableElement) return el.copyWith(x: v);
   if (el is ContainerElement) return el.copyWith(x: v);
   return el;
 }
@@ -1130,6 +1137,7 @@ CanvasElement _withY(CanvasElement el, double v) {
   if (el is ImageElement) return el.copyWith(y: v);
   if (el is QrElement) return el.copyWith(y: v);
   if (el is BarcodeElement) return el.copyWith(y: v);
+  if (el is TableElement) return el.copyWith(y: v);
   if (el is ContainerElement) return el.copyWith(y: v);
   return el;
 }
@@ -1140,6 +1148,7 @@ CanvasElement _withW(CanvasElement el, double v) {
   if (el is ImageElement) return el.copyWith(width: v);
   if (el is QrElement) return el.copyWith(width: v);
   if (el is BarcodeElement) return el.copyWith(width: v);
+  if (el is TableElement) return el.copyWith(width: v);
   if (el is ContainerElement) return el.copyWith(width: v);
   return el;
 }
@@ -1150,6 +1159,7 @@ CanvasElement _withH(CanvasElement el, double v) {
   if (el is ImageElement) return el.copyWith(height: v);
   if (el is QrElement) return el.copyWith(height: v);
   if (el is BarcodeElement) return el.copyWith(height: v);
+  if (el is TableElement) return el.copyWith(height: v);
   if (el is ContainerElement) return el.copyWith(height: v);
   return el;
 }
@@ -1160,6 +1170,7 @@ CanvasElement _withRot(CanvasElement el, double v) {
   if (el is ImageElement) return el.copyWith(rotation: v);
   if (el is QrElement) return el.copyWith(rotation: v);
   if (el is BarcodeElement) return el.copyWith(rotation: v);
+  if (el is TableElement) return el.copyWith(rotation: v);
   if (el is ContainerElement) return el.copyWith(rotation: v);
   return el;
 }
@@ -1170,6 +1181,7 @@ CanvasElement _withOp(CanvasElement el, double v) {
   if (el is ImageElement) return el.copyWith(opacity: v);
   if (el is QrElement) return el.copyWith(opacity: v);
   if (el is BarcodeElement) return el.copyWith(opacity: v);
+  if (el is TableElement) return el.copyWith(opacity: v);
   if (el is ContainerElement) return el.copyWith(opacity: v);
   return el;
 }
