@@ -130,6 +130,14 @@ class TableElement implements CanvasElement {
   final String zebraColor;
   final double cellPaddingX;
 
+  /// Horizontal gutter around a flowing table, in px.
+  ///
+  /// A table has to be a top-level section so `pw.Table` can paginate — wrapping
+  /// it in a padded col makes MultiPage treat the whole block as unsplittable.
+  /// This is the gutter that used to come from absolute `x` (40 px on the
+  /// RepairX invoices) without pinning the document back onto the Stack path.
+  final double paddingX;
+
   /// Drawn when the bound list is missing or empty.
   final String emptyText;
 
@@ -164,6 +172,7 @@ class TableElement implements CanvasElement {
     this.zebra = false,
     this.zebraColor = '#F8FAFC',
     this.cellPaddingX = 6,
+    this.paddingX = 0,
     this.emptyText = 'No items.',
     this.flex,
     this.alignSelf,
@@ -235,6 +244,7 @@ class TableElement implements CanvasElement {
     bool? zebra,
     String? zebraColor,
     double? cellPaddingX,
+    double? paddingX,
     String? emptyText,
     int? flex,
     String? alignSelf,
@@ -267,6 +277,7 @@ class TableElement implements CanvasElement {
         zebra: zebra ?? this.zebra,
         zebraColor: zebraColor ?? this.zebraColor,
         cellPaddingX: cellPaddingX ?? this.cellPaddingX,
+        paddingX: paddingX ?? this.paddingX,
         emptyText: emptyText ?? this.emptyText,
         flex: flex ?? this.flex,
         alignSelf: alignSelf ?? this.alignSelf,
@@ -302,6 +313,7 @@ class TableElement implements CanvasElement {
         'zebra': zebra,
         'zebraColor': zebraColor,
         'cellPaddingX': cellPaddingX,
+        if (paddingX != 0) 'paddingX': paddingX,
         'emptyText': emptyText,
         if (flex != null) 'flex': flex,
         if (alignSelf != null) 'alignSelf': alignSelf,
@@ -338,6 +350,7 @@ class TableElement implements CanvasElement {
         zebra: j['zebra'] as bool? ?? false,
         zebraColor: j['zebraColor'] as String? ?? '#F8FAFC',
         cellPaddingX: (j['cellPaddingX'] as num? ?? 6).toDouble(),
+        paddingX: (j['paddingX'] as num? ?? 0).toDouble(),
         emptyText: j['emptyText'] as String? ?? 'No items.',
         flex: j['flex'] as int?,
         alignSelf: j['alignSelf'] as String?,

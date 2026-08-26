@@ -136,6 +136,22 @@ void main() {
       expect(t.zebra, isTrue);
     });
 
+    test('a raw type:table node is compiled, not rejected', () {
+      final els = compileTemplate(col([
+        {
+          'type': 'table',
+          'rowSource': 'invoice.lines',
+          'columns': [
+            {'key': 'description', 'label': 'Description', 'flex': 6}
+          ],
+        }
+      ]), idPrefix: 't');
+
+      final t = els.single as TableElement;
+      expect(t.rowSource, 'invoice.lines');
+      expect(t.isSection, isTrue);
+    });
+
     test('an unknown node fails loudly rather than rendering nothing', () {
       expect(
         () => compileTemplate(col([

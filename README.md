@@ -31,7 +31,7 @@ void main() {
 }
 ```
 
-See **[WIDGET_API.md](WIDGET_API.md)** for the full embedding, storage, printer, headless print/render, and token contract.
+See **[WIDGET_API.md](WIDGET_API.md)** for the full embedding, storage, printer, headless print/render, token contract, line-items table, and the row/col DSL used to author RepairX's seven default templates (`kRepairXDefaultTemplates`).
 
 ## Standalone app
 

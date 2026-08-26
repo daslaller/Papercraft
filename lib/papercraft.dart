@@ -106,6 +106,7 @@ export 'models/table_element.dart';
 export 'models/table_layout.dart';
 export 'models/template_dsl.dart';
 export 'models/template_tokens.dart';
+export 'templates/repairx_defaults.dart';
 
 // ── Services ──────────────────────────────────────────────────────────────────
 export 'services/template_service.dart';

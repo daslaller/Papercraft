@@ -428,10 +428,71 @@ ctrl.zoomIn();
 
 ---
 
+## Line items (`table` element)
+
+Invoice, estimate, and insurance documents bind a repeating row list with a `table` element. Row data travels on the same print `record` the tokens come from:
+
+```json
+{
+  "type": "table",
+  "rowSource": "invoice.lines",
+  "columns": [
+    { "key": "description", "label": "Description", "flex": 6, "align": "left" },
+    { "key": "qty",         "label": "Qty",         "flex": 1, "align": "right" },
+    { "key": "amount",      "label": "Amount",      "flex": 1.8, "align": "right" }
+  ],
+  "headerHeight": 24, "rowHeight": 22,
+  "headerFontSize": 8, "headerColor": "#64748B", "headerBackground": "#F1F5F9",
+  "gridColor": "#E2E8F0", "gridWidth": 0.5, "cellPaddingX": 6
+}
+```
+
+`record['invoice.lines']` is a `List<Map>` with those column keys as pre-formatted strings. Missing/empty lists still draw the header (and `emptyText`); `maxRows: 0` (the default) means no cap — a flow table paginates instead of dropping rows.
+
+`tokensIn` / `missingTokens` also report `rowSource` keys (`invoice.lines`) so a host can see that the record needs a list, not only `{{tokens}}`.
+
+---
+
+## Authoring defaults (row/col DSL)
+
+Hand-writing absolute `x`/`y` JSON is how a default becomes unmaintainable. `compileTemplate` turns a nested row/column spec into the same element list the editor stores:
+
+```dart
+final elements = compileTemplate(
+  col([
+    bar(),
+    row([
+      text('{{company.name}}', size: 20, weight: 'bold', flex: 3),
+      text('INVOICE', size: 24, textAlign: 'right', flex: 2),
+    ]),
+    rule(),
+    table('invoice.lines', columns: kRepairXLineColumns),
+  ]),
+  idPrefix: 'invoice',
+);
+assertFlowOnly(elements);
+```
+
+The compiler also accepts a raw element object (`{"type": "table", "rowSource": "invoice.lines", ...}`) so line-items JSON dropped into a spec is not rejected. Output is flow-only (no `x`/`y`), which is what lets `PrintService.buildPdf` paginate.
+
+Seven RepairX defaults ship as DSL specs on `kRepairXDefaultTemplates`. Seed them with:
+
+```dart
+for (final def in kRepairXDefaultTemplates) {
+  await storage.save(def.toTemplate(ownerId: companyId));
+}
+```
+
+`docRole` (`invoice`, `estimate`, `insurance`, `intake`, `ticket_label`, `purchase_label`, `product_label`) is how a host tells four A4 documents apart — they all share `docType: 'document'`. `withAccent(elementsJson, companyAccent)` rewrites the baked `#2563EB` bar.
+
+---
+
 ## RepairX integration recipe
 
 1. Register `PapercraftStorage` backed by your DB.
 2. Register `CompositePrinterProvider` (local OS + RepairX printers).
-3. Embed `PapercraftEditor` for design; use `onSave` to refresh host lists.
-4. For work-order print flows, load the template + elements and call `PapercraftPrint.printToAssociatedPrinter` — no editor required.
-5. On `PrinterUnavailableException`, show your own UI or rely on the built-in dialog when you pass `context`.
+3. Seed `kRepairXDefaultTemplates` (or compile your own DSL specs) and set `docRole` / `isDefault` per slot.
+4. Put line items on the print record as `invoice.lines` / `estimate.lines` — `List<Map>` with `description`, `sku`, `qty`, `unit_price`, `vat_rate`, `amount`.
+5. Embed `PapercraftEditor` for design; use `onSave` to refresh host lists.
+6. For work-order print flows, load the template + elements and call `PapercraftPrint.printToAssociatedPrinter` — no editor required.
+7. On `PrinterUnavailableException`, show your own UI or rely on the built-in dialog when you pass `context`.

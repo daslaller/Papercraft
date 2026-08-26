@@ -332,8 +332,8 @@ class ElementRenderer extends StatelessWidget {
     }
 
     return SizedBox(
-      width: e.width ?? 120,
-      height: e.height ?? 80,
+      width: e.width,
+      height: e.height ?? (isLine ? 2 : 8),
       child: Opacity(
         opacity: e.opacity,
         child: Container(decoration: decoration),
@@ -602,7 +602,18 @@ class ElementRenderer extends StatelessWidget {
       );
     }
 
-    return Column(
+    final bodyRows = showPlaceholders
+        ? cells
+        : t.isEmpty
+            ? [
+                [
+                  for (var c = 0; c < columns.length; c++)
+                    c == 0 ? e.emptyText : '',
+                ]
+              ]
+            : cells;
+
+    Widget built = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -631,7 +642,7 @@ class ElementRenderer extends StatelessWidget {
                         header: true),
                 ],
               ),
-            for (var r = 0; r < cells.length; r++)
+            for (var r = 0; r < bodyRows.length; r++)
               TableRow(
                 decoration: BoxDecoration(
                   color: e.zebra && r.isOdd
@@ -641,7 +652,8 @@ class ElementRenderer extends StatelessWidget {
                 ),
                 children: [
                   for (var c = 0; c < columns.length; c++)
-                    cell(c < cells[r].length ? cells[r][c] : '', columns[c],
+                    cell(c < bodyRows[r].length ? bodyRows[r][c] : '',
+                        columns[c],
                         header: false),
                 ],
               ),
@@ -660,6 +672,13 @@ class ElementRenderer extends StatelessWidget {
           ),
       ],
     );
+    if (e.paddingX > 0) {
+      built = Padding(
+        padding: EdgeInsets.symmetric(horizontal: e.paddingX),
+        child: built,
+      );
+    }
+    return built;
   }
 
   CrossAxisAlignment _crossAxis(FlowAlign a) => switch (a) {
