@@ -47,6 +47,18 @@ void main() {
       expect(tokens, isNot(contains('description')));
     });
 
+    test('listSourcesIn reports the bound row list, not as a token', () {
+      final els = const [
+        TableElement(id: 'x', rowSource: 'invoice.lines', columns: [
+          TableColumn(key: 'description', label: 'Description'),
+        ]),
+      ];
+      expect(listSourcesIn(els), ['invoice.lines']);
+      expect(tokensIn(els), isEmpty);
+      expect(missingTokens(els, const {}), ['invoice.lines']);
+      expect(missingTokens(els, {'invoice.lines': []}), isEmpty);
+    });
+
     test('strips filters and skips computed references', () {
       final tokens = tokensIn(const [
         TextElement(id: 'a', content: '{{customer.name|uppercase}}'),

@@ -171,8 +171,11 @@ class PrintService {
         ),
         build: (_) => [
           for (final e in elements)
-            _renderElement(
-                e, fonts, imageCache, record, entityName, computedFields),
+            pw.SizedBox(
+              width: pageFormat.width,
+              child: _renderElement(
+                  e, fonts, imageCache, record, entityName, computedFields),
+            ),
         ],
       ));
       return doc.save();
@@ -405,7 +408,7 @@ class PrintService {
     final t = resolveTable(e, record,
         entityName: entityName, computedFields: computedFields);
 
-    if (t.columns.isEmpty || t.isEmpty) {
+    if (t.columns.isEmpty) {
       return pw.Container(
         padding: pw.EdgeInsets.symmetric(
             horizontal: _pxToPt(e.cellPaddingX), vertical: _pxToPt(6)),
@@ -461,17 +464,25 @@ class PrintService {
                   header: true),
           ],
         ),
-      for (var r = 0; r < t.cells.length; r++)
+      if (t.isEmpty)
         pw.TableRow(
-          decoration: pw.BoxDecoration(
-            color: e.zebra && r.isOdd ? _hex(e.zebraColor) : null,
-            border: pw.Border(bottom: hairline),
-          ),
           children: [
             for (var c = 0; c < t.columns.length; c++)
-              cell(t.cells[r][c], t.columns[c], header: false),
+              cell(c == 0 ? e.emptyText : '', t.columns[c], header: false),
           ],
-        ),
+        )
+      else
+        for (var r = 0; r < t.cells.length; r++)
+          pw.TableRow(
+            decoration: pw.BoxDecoration(
+              color: e.zebra && r.isOdd ? _hex(e.zebraColor) : null,
+              border: pw.Border(bottom: hairline),
+            ),
+            children: [
+              for (var c = 0; c < t.columns.length; c++)
+                cell(t.cells[r][c], t.columns[c], header: false),
+            ],
+          ),
     ];
 
     final table = pw.Table(
@@ -480,22 +491,34 @@ class PrintService {
     );
 
     // A clipped table that says nothing reads as a complete one.
-    if (t.overflow == null) return table;
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-      children: [
-        table,
-        pw.Container(
-          padding: pw.EdgeInsets.symmetric(
-              horizontal: _pxToPt(e.cellPaddingX), vertical: _pxToPt(4)),
-          child: pw.Text(fonts.safe(t.overflow!),
-              style: pw.TextStyle(
-                  font: fonts.italic,
-                  fontSize: _pxToPt(e.fontSize),
-                  color: _hex(e.headerColor))),
-        ),
-      ],
-    );
+    pw.Widget out = t.overflow == null
+        ? table
+        : pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+            children: [
+              table,
+              pw.Container(
+                padding: pw.EdgeInsets.symmetric(
+                    horizontal: _pxToPt(e.cellPaddingX),
+                    vertical: _pxToPt(4)),
+                child: pw.Text(fonts.safe(t.overflow!),
+                    style: pw.TextStyle(
+                        font: fonts.italic,
+                        fontSize: _pxToPt(e.fontSize),
+                        color: _hex(e.headerColor))),
+              ),
+            ],
+          );
+
+    // Applied here — not by wrapping the table in a padded col — so
+    // `pw.Table` stays a direct spanning child of MultiPage.
+    if (e.paddingX > 0) {
+      out = pw.Padding(
+        padding: pw.EdgeInsets.symmetric(horizontal: _pxToPt(e.paddingX)),
+        child: out,
+      );
+    }
+    return out;
   }
 
   /// Fixed columns keep their width; the rest split what is left by flex.
@@ -566,6 +589,8 @@ class PrintService {
       font: font,
       fontSize: _pxToPt(e.fontSize),
       color: color,
+      letterSpacing:
+          e.letterSpacing != null ? _pxToPt(e.letterSpacing!) : null,
       lineSpacing: (e.lineHeight - 1) * _pxToPt(e.fontSize) * 0.5,
     );
 
@@ -582,8 +607,11 @@ class PrintService {
   static pw.Widget _renderShape(ShapeElement e) {
     final isCircle = e.shape == 'circle';
     final isLine = e.shape == 'line';
-    final w = _pxToPt(e.width ?? 120);
-    final h = _pxToPt(e.height ?? (isLine ? 2 : 80));
+    // Null width means "fill the parent" — a hairline rule or accent bar in a
+    // flow column has no authored width, and defaulting to 120 px left every
+    // divider looking like a short dash on the left edge of the page.
+    final w = e.width != null ? _pxToPt(e.width!) : null;
+    final h = _pxToPt(e.height ?? (isLine ? 2 : 8));
 
     PdfColor? fillColor;
     if (e.fill != 'transparent') fillColor = _hex(e.fill);
@@ -662,12 +690,16 @@ class PrintService {
     // using it via _detectBarcode.
     return pw.Opacity(
       opacity: e.opacity,
-      child: pw.BarcodeWidget(
-        barcode: pw.Barcode.qrCode(),
-        data: content,
-        width: w,
-        height: h,
-        drawText: false,
+      child: pw.LimitedBox(
+        maxWidth: w,
+        maxHeight: h,
+        child: pw.BarcodeWidget(
+          barcode: pw.Barcode.qrCode(),
+          data: content,
+          width: w,
+          height: h,
+          drawText: false,
+        ),
       ),
     );
   }
@@ -684,15 +716,19 @@ class PrintService {
     final h = _pxToPt(e.height ?? 80);
     return pw.Opacity(
       opacity: e.opacity,
-      child: pw.BarcodeWidget(
-        barcode: _detectBarcode(content),
-        data: content,
-        width: w,
-        height: h,
-        color: _hex(e.color),
-        backgroundColor: _hex(e.background),
-        drawText: e.displayValue,
-        textPadding: 2,
+      child: pw.LimitedBox(
+        maxWidth: w,
+        maxHeight: h,
+        child: pw.BarcodeWidget(
+          barcode: _detectBarcode(content),
+          data: content,
+          width: w,
+          height: h,
+          color: _hex(e.color),
+          backgroundColor: _hex(e.background),
+          drawText: e.displayValue,
+          textPadding: 2,
+        ),
       ),
     );
   }
@@ -786,12 +822,7 @@ class PrintService {
         if (slot.expand) {
           kids.add(pw.Expanded(flex: slot.flex, child: child));
         } else {
-          kids.add(pw.SizedBox(
-            width: slot.stretchWidth ? double.infinity : null,
-            height:
-                slot.fixedHeight != null ? _pxToPt(slot.fixedHeight!) : null,
-            child: child,
-          ));
+          kids.add(child);
         }
       }
       content = isRow
@@ -810,13 +841,16 @@ class PrintService {
     return pw.Opacity(
       opacity: e.opacity,
       child: pw.Container(
+        // Sections take the page's incoming max width. Passing
+        // `double.infinity` as a tight width used to make barcode/shape
+        // painters draw a rect of infinite size and assert.
         width: e.isSection
-            ? double.infinity
+            ? null
             : (e.width != null ? _pxToPt(e.width!) : null),
         height: e.isSection
             ? null
             : (e.height != null ? _pxToPt(e.height!) : null),
-        constraints: e.isSection
+        constraints: e.isSection && e.minHeight > 0
             ? pw.BoxConstraints(minHeight: _pxToPt(e.minHeight))
             : null,
         decoration: pw.BoxDecoration(

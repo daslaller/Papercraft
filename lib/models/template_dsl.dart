@@ -53,6 +53,9 @@ import 'table_element.dart';
 const String kInk = '#0F172A';
 const String kMuted = '#64748B';
 const String kHairline = '#E2E8F0';
+const String kAccent = '#2563EB';
+const String kTint = '#F1F5F9';
+const String kSig = '#94A3B8';
 
 // ── Compiler ─────────────────────────────────────────────────────────────────
 
@@ -144,6 +147,7 @@ CanvasElement _compile(
       alignItems: node['align'] as String? ?? (isRow ? 'center' : 'stretch'),
       background: node['background'] as String? ?? 'transparent',
       minHeight: _d(node['minHeight']) ?? 0,
+      borderRadius: _d(node['radius']) ?? 0,
       flex: _flex(node),
     );
   }
@@ -180,24 +184,8 @@ CanvasElement _compile(
 
   if (node.containsKey('table')) {
     final t = Map<String, dynamic>.from(node['table'] as Map);
-    return TableElement(
-      id: id,
-      isSection: section,
-      rowSource: t['data'] as String? ?? '',
-      columnsFrom: t['columnsFrom'] as String? ?? '',
-      columns: [
-        for (final c in (t['columns'] as List? ?? const []))
-          TableColumn.fromJson(Map<String, dynamic>.from(c as Map)),
-      ],
-      zebra: t['zebra'] as bool? ?? false,
-      showHeader: t['showHeader'] as bool? ?? true,
-      maxRows: t['maxRows'] as int? ?? 0,
-      fontSize: _d(t['size']) ?? 9,
-      rowHeight: _d(t['rowHeight']) ?? 18,
-      headerHeight: _d(t['headerHeight']) ?? 20,
-      emptyText: t['emptyText'] as String? ?? 'No items.',
-      flex: _flex(node),
-    );
+    t.putIfAbsent('padX', () => node['padX']);
+    return _tableFrom(t, id: id, section: section, flex: _flex(node));
   }
 
   if (node.containsKey('qr')) {
@@ -219,6 +207,9 @@ CanvasElement _compile(
       width: _d(node['width']) ?? 160,
       height: _d(node['height']) ?? 40,
       displayValue: node['displayValue'] as bool? ?? true,
+      format: node['format'] as String? ?? 'CODE128',
+      color: node['color'] as String? ?? '#000000',
+      background: node['background'] as String? ?? '#ffffff',
       flex: _flex(node),
       alignSelf: node['alignSelf'] as String?,
     );
@@ -273,10 +264,96 @@ CanvasElement _compile(
     );
   }
 
+  if (node.containsKey('shape')) {
+    final s = node['shape'] is Map
+        ? Map<String, dynamic>.from(node['shape'] as Map)
+        : <String, dynamic>{};
+    return ShapeElement(
+      id: id,
+      shape: s['kind'] as String? ?? 'rectangle',
+      fill: s['fill'] as String? ?? 'transparent',
+      stroke: s['stroke'] as String? ?? 'transparent',
+      strokeWidth: _d(s['strokeWidth']) ?? 0,
+      borderRadius: _d(s['radius']) ?? 0,
+      width: _d(s['width']),
+      height: _d(s['height']),
+      flex: _flex(node),
+      alignSelf: node['alignSelf'] as String?,
+    );
+  }
+
+  // A host (or a converted template) may drop a raw element JSON object into
+  // the spec — most importantly a `type: table` line-items node with
+  // `rowSource` + `columns`. Compiling that as a first-class node, rather than
+  // rejecting it, is what "respect the line-items JSON" means.
+  if (node['type'] is String) {
+    final copy = Map<String, dynamic>.from(node);
+    copy.putIfAbsent('id', () => id);
+    if (section) copy['isSection'] = true;
+    // Flow-only: a pasted absolute table must not pin the whole document
+    // back onto the single-page Stack path. The old left offset becomes
+    // the flowing gutter so a RepairX `x: 40, width: 714` table still
+    // sits in the letterhead margin.
+    final x = copy.remove('x');
+    copy.remove('y');
+    if (section &&
+        copy['paddingX'] == null &&
+        x is num &&
+        (copy['type'] == 'table')) {
+      copy['paddingX'] = x;
+    }
+    return CanvasElement.fromJson(copy);
+  }
+
   throw ArgumentError('Unknown DSL node: ${node.keys.join(', ')}');
 }
 
-int? _flex(Map<String, dynamic> node) => node['flex'] as int?;
+/// Builds a [TableElement] from either the DSL shape (`data`, `size`) or the
+/// element JSON shape (`rowSource`, `fontSize`, `headerColor`, …). Both must
+/// produce the same painter inputs — a line-items table that looks right in
+/// the spec and wrong on paper is the failure this exists to prevent.
+TableElement _tableFrom(
+  Map<String, dynamic> t, {
+  required String id,
+  required bool section,
+  int? flex,
+}) {
+  return TableElement(
+    id: t['id'] as String? ?? id,
+    isSection: section,
+    rowSource: t['data'] as String? ?? t['rowSource'] as String? ?? '',
+    columnsFrom: t['columnsFrom'] as String? ?? '',
+    columns: [
+      for (final c in (t['columns'] as List? ?? const []))
+        TableColumn.fromJson(Map<String, dynamic>.from(c as Map)),
+    ],
+    zebra: t['zebra'] as bool? ?? false,
+    showHeader: t['showHeader'] as bool? ?? true,
+    maxRows: t['maxRows'] as int? ?? 0,
+    fontSize: _d(t['size'] ?? t['fontSize']) ?? 9,
+    fontFamily: t['fontFamily'] as String? ?? 'Inter',
+    color: t['color'] as String? ?? kInk,
+    rowHeight: _d(t['rowHeight']) ?? 22,
+    headerHeight: _d(t['headerHeight']) ?? 24,
+    headerFontSize: _d(t['headerFontSize']) ?? 8,
+    headerColor: t['headerColor'] as String? ?? kMuted,
+    headerBackground: t['headerBackground'] as String? ?? kTint,
+    gridColor: t['gridColor'] as String? ?? kHairline,
+    gridWidth: _d(t['gridWidth']) ?? 0.5,
+    zebraColor: t['zebraColor'] as String? ?? '#F8FAFC',
+    cellPaddingX: _d(t['cellPaddingX']) ?? 6,
+    paddingX: _d(t['padX'] ?? t['paddingX']) ?? 0,
+    emptyText: t['emptyText'] as String? ?? 'No items.',
+    flex: flex,
+  );
+}
+
+int? _flex(Map<String, dynamic> node) {
+  final v = node['flex'];
+  if (v is int) return v;
+  if (v is num) return v.round();
+  return null;
+}
 
 double? _d(dynamic v) => v == null ? null : (v as num).toDouble();
 
@@ -293,6 +370,8 @@ Map<String, dynamic> col(
   double? padY,
   String? align,
   String? background,
+  double? radius,
+  double? minHeight,
   int? flex,
 }) =>
     {
@@ -303,6 +382,8 @@ Map<String, dynamic> col(
       if (padY != null) 'padY': padY,
       if (align != null) 'align': align,
       if (background != null) 'background': background,
+      if (radius != null) 'radius': radius,
+      if (minHeight != null) 'minHeight': minHeight,
       if (flex != null) 'flex': flex,
     };
 
@@ -314,6 +395,8 @@ Map<String, dynamic> row(
   double? padY,
   String? align,
   String? background,
+  double? radius,
+  double? minHeight,
   int? flex,
 }) =>
     {
@@ -324,6 +407,8 @@ Map<String, dynamic> row(
       if (padY != null) 'padY': padY,
       if (align != null) 'align': align,
       if (background != null) 'background': background,
+      if (radius != null) 'radius': radius,
+      if (minHeight != null) 'minHeight': minHeight,
       if (flex != null) 'flex': flex,
     };
 
@@ -351,18 +436,22 @@ Map<String, dynamic> text(
     };
 
 /// A small uppercase field caption.
-Map<String, dynamic> label(String content, {double? size, int? flex}) => {
+Map<String, dynamic> label(String content,
+        {double? size, int? flex, String? color}) =>
+    {
       'label': content,
       if (size != null) 'size': size,
       if (flex != null) 'flex': flex,
+      if (color != null) 'color': color,
     };
 
 /// A caption stacked over its value — the pattern every document header uses.
 Map<String, dynamic> field(String caption, String value,
-        {double? size, int? flex}) =>
+        {double? size, int? flex, String? sub, String? weight}) =>
     col([
       label(caption),
-      text(value, size: size ?? 10),
+      text(value, size: size ?? 10, weight: weight ?? '600'),
+      if (sub != null) text(sub, size: 8.5, color: kMuted, lineHeight: 1.4),
     ], gap: 1, flex: flex);
 
 /// A label and a value on one line, the value right-aligned. The label hugs
@@ -380,6 +469,71 @@ Map<String, dynamic> kv(String k, String v,
           flex: 1),
     ], gap: 8);
 
+/// Header meta: both sides right-aligned, the caption taking leftover width.
+Map<String, dynamic> meta(String k, String v) => row([
+      text(k, size: 8.5, color: kMuted, textAlign: 'right', flex: 1),
+      text(v, size: 8.5, weight: '600', textAlign: 'right'),
+    ], gap: 12);
+
+/// Accent section title with a hairline under it.
+Map<String, dynamic> heading(String title, {String? color}) => col([
+      text(title.toUpperCase(),
+          size: 8, weight: 'bold', color: color ?? kAccent, tracking: 0.9),
+      rule(),
+    ], gap: 3);
+
+/// Full-bleed accent strip — the 6 px bar every A4 document starts with.
+Map<String, dynamic> bar({String? color, double? height}) => {
+      'shape': {
+        'fill': color ?? kAccent,
+        'height': height ?? 6,
+      }
+    };
+
+Map<String, dynamic> shape({
+  String kind = 'rectangle',
+  String? fill,
+  String? stroke,
+  double? strokeWidth,
+  double? radius,
+  double? width,
+  double? height,
+  int? flex,
+  String? alignSelf,
+}) =>
+    {
+      'shape': {
+        'kind': kind,
+        if (fill != null) 'fill': fill,
+        if (stroke != null) 'stroke': stroke,
+        if (strokeWidth != null) 'strokeWidth': strokeWidth,
+        if (radius != null) 'radius': radius,
+        if (width != null) 'width': width,
+        if (height != null) 'height': height,
+      },
+      if (flex != null) 'flex': flex,
+      if (alignSelf != null) 'alignSelf': alignSelf,
+    };
+
+/// Empty checkbox + caption, for printed intake forms.
+Map<String, dynamic> check(String caption, {int? flex}) => row([
+      shape(
+          width: 10,
+          height: 10,
+          fill: '#ffffff',
+          stroke: kSig,
+          strokeWidth: 1,
+          radius: 2),
+      text(caption, size: 8.5),
+    ], gap: 6, flex: flex);
+
+/// Signature line with a caption underneath.
+Map<String, dynamic> sig(String caption, {int? flex}) => col([
+      spacer(height: 28),
+      rule(color: kSig),
+      text(caption, size: 7, color: kMuted, tracking: 0.6),
+    ], gap: 4, flex: flex);
+
 Map<String, dynamic> table(
   String data, {
   List<TableColumn> columns = const [],
@@ -390,6 +544,16 @@ Map<String, dynamic> table(
   double? size,
   double? rowHeight,
   double? headerHeight,
+  double? headerFontSize,
+  String? headerColor,
+  String? headerBackground,
+  String? gridColor,
+  double? gridWidth,
+  String? zebraColor,
+  double? cellPaddingX,
+  double? padX,
+  String? fontFamily,
+  String? color,
   String? emptyText,
   int? flex,
 }) =>
@@ -404,24 +568,46 @@ Map<String, dynamic> table(
         if (size != null) 'size': size,
         if (rowHeight != null) 'rowHeight': rowHeight,
         if (headerHeight != null) 'headerHeight': headerHeight,
+        if (headerFontSize != null) 'headerFontSize': headerFontSize,
+        if (headerColor != null) 'headerColor': headerColor,
+        if (headerBackground != null) 'headerBackground': headerBackground,
+        if (gridColor != null) 'gridColor': gridColor,
+        if (gridWidth != null) 'gridWidth': gridWidth,
+        if (zebraColor != null) 'zebraColor': zebraColor,
+        if (cellPaddingX != null) 'cellPaddingX': cellPaddingX,
+        if (fontFamily != null) 'fontFamily': fontFamily,
+        if (color != null) 'color': color,
         if (emptyText != null) 'emptyText': emptyText,
       },
+      if (padX != null) 'padX': padX,
       if (flex != null) 'flex': flex,
     };
 
-Map<String, dynamic> qr(String content, {double? size, int? flex}) => {
+Map<String, dynamic> qr(String content,
+        {double? size, int? flex, String? alignSelf}) =>
+    {
       'qr': content,
       if (size != null) 'size': size,
       if (flex != null) 'flex': flex,
+      if (alignSelf != null) 'alignSelf': alignSelf,
     };
 
 Map<String, dynamic> barcode(String content,
-        {double? width, double? height, bool? displayValue, int? flex}) =>
+        {double? width,
+        double? height,
+        bool? displayValue,
+        String? format,
+        String? color,
+        String? background,
+        int? flex}) =>
     {
       'barcode': content,
       if (width != null) 'width': width,
       if (height != null) 'height': height,
       if (displayValue != null) 'displayValue': displayValue,
+      if (format != null) 'format': format,
+      if (color != null) 'color': color,
+      if (background != null) 'background': background,
       if (flex != null) 'flex': flex,
     };
 

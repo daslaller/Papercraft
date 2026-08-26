@@ -66,6 +66,30 @@ List<String> tokensIn(List<CanvasElement> elements) {
   return ordered;
 }
 
+/// Record keys that hold row lists for [TableElement]s, in first-appearance
+/// order. These are not `{{tokens}}` — they are list-valued entries the host
+/// must put on the same print record (`invoice.lines`, `estimate.lines`).
+List<String> listSourcesIn(List<CanvasElement> elements) {
+  final found = <String>{};
+  final ordered = <String>[];
+
+  void walk(CanvasElement e) {
+    switch (e) {
+      case TableElement t:
+        if (t.rowSource.isNotEmpty && found.add(t.rowSource)) {
+          ordered.add(t.rowSource);
+        }
+      case ContainerElement c:
+        c.children.forEach(walk);
+      default:
+        break;
+    }
+  }
+
+  elements.forEach(walk);
+  return ordered;
+}
+
 /// The tokens [elements] needs that [record] has no entry for at all.
 ///
 /// **Absent is not the same as empty, and the difference is the whole point.**
@@ -86,7 +110,7 @@ List<String> missingTokens(
 }) {
   final present = record?.keys.toSet() ?? const <String>{};
   return [
-    for (final path in tokensIn(elements))
+    for (final path in [...tokensIn(elements), ...listSourcesIn(elements)])
       if (!present.contains(path) && !ignore.contains(path)) path,
   ];
 }
